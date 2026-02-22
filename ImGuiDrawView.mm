@@ -7,7 +7,7 @@
 #import "Esp/CaptainHook.h"
 #import "x2nios.h"
 #include <cmath>
-#include <mach-o/dyld.h> // Required for internal memory bypassing
+#include <mach-o/dyld.h> 
 
 #define kWidth  [UIScreen mainScreen].bounds.size.width
 #define kHeight [UIScreen mainScreen].bounds.size.height
@@ -16,48 +16,49 @@
 #define g 0.86602540378444 
 
 // --- ANIMAL COMPANY SPAWNER GLOBALS ---
-int current_tab = 0;
-int selected_category = 0;
-int selected_item_idx = 0;
-int selected_location = 0;
+// Added "static" to everything to prevent Theos "missing prototype" build crashes!
+static int current_tab = 0;
+static int selected_category = 0;
+static int selected_item_idx = 0;
+static int selected_location = 0;
 
-int item_hue = 0;        // -124 to 124
-int item_saturation = 0; // -124 to 124
-int item_size = 0;       // -127 to 127
+static int item_hue = 0;        
+static int item_saturation = 0; 
+static int item_size = 0;       
 
 struct Vec3 { float x, y, z; };
-float custom_coords[3] = { 0.0f, 0.0f, 0.0f };
+static float custom_coords[3] = { 0.0f, 0.0f, 0.0f };
 
-const char* locations[] = { "On Player (Local)", "Inside Selling Machine", "Ship / Safety Zone", "Loading Screen Room", "Mines / Sewers Entrance", "Custom Coordinates" };
-const char* categories[] = { "Gadgets & Tools", "Weapons", "Explosives & Traps", "Loot (For Nuts)", "Troll / Toys" };
-const char* gadgets[] = { "Flashlight", "Walkie Talkie", "Scanner", "Tablet", "Flaregun", "Jetpack", "Umbrella" };
-const char* weapons[] = { "Baseball Bat", "Crowbar", "Police Baton", "Shotgun", "Revolver", "Crossbow" };
-const char* explosives[] = { "Dynamite", "Sticky Bomb", "Time Bomb", "Tripmine", "Impact Grenade" };
-const char* loot[] = { "Gold Bar", "Cash Pile", "Calculator", "Painting", "Ruby", "Silver Chunk", "Keycard" };
-const char* troll[] = { "Whoopee Cushion", "Boombox", "Traffic Light", "Glowstick", "Apple", "Banana" };
+static const char* locations[] = { "On Player (Local)", "Inside Selling Machine", "Ship / Safety Zone", "Loading Screen Room", "Mines / Sewers Entrance", "Custom Coordinates" };
+static const char* categories[] = { "Gadgets & Tools", "Weapons", "Explosives & Traps", "Loot (For Nuts)", "Troll / Toys" };
+static const char* gadgets[] = { "Flashlight", "Walkie Talkie", "Scanner", "Tablet", "Flaregun", "Jetpack", "Umbrella" };
+static const char* weapons[] = { "Baseball Bat", "Crowbar", "Police Baton", "Shotgun", "Revolver", "Crossbow" };
+static const char* explosives[] = { "Dynamite", "Sticky Bomb", "Time Bomb", "Tripmine", "Impact Grenade" };
+static const char* loot[] = { "Gold Bar", "Cash Pile", "Calculator", "Painting", "Ruby", "Silver Chunk", "Keycard" };
+static const char* troll[] = { "Whoopee Cushion", "Boombox", "Traffic Light", "Glowstick", "Apple", "Banana" };
 
-int GetRealItemID(int category, int index) { return (category * 100) + index; }
+static inline int GetRealItemID(int category, int index) { return (category * 100) + index; }
 
-Vec3 GetTargetCoordinates(int loc_idx) {
-    switch(loc_idx) {
-        case 0: return { 0.0f, 0.0f, 0.0f };
-        case 1: return { 15.5f, 2.0f, -10.2f };
-        case 2: return { 0.0f, 5.0f, 0.0f };
-        case 3: return { -50.0f, 10.0f, -50.0f };
-        case 4: return { 100.0f, -20.0f, 50.0f };
-        case 5: return { custom_coords[0], custom_coords[1], custom_coords[2] };
-    }
-    return { 0.0f, 0.0f, 0.0f };
+static inline Vec3 GetTargetCoordinates(int loc_idx) {
+    Vec3 coords;
+    coords.x = 0.0f; coords.y = 0.0f; coords.z = 0.0f; // Safe C++ initialization
+    
+    if (loc_idx == 1) { coords.x = 15.5f; coords.y = 2.0f; coords.z = -10.2f; }
+    else if (loc_idx == 2) { coords.y = 5.0f; }
+    else if (loc_idx == 3) { coords.x = -50.0f; coords.y = 10.0f; coords.z = -50.0f; }
+    else if (loc_idx == 4) { coords.x = 100.0f; coords.y = -20.0f; coords.z = 50.0f; }
+    else if (loc_idx == 5) { coords.x = custom_coords[0]; coords.y = custom_coords[1]; coords.z = custom_coords[2]; }
+    
+    return coords;
 }
 
-// Safely grab the game's base memory address
-uint64_t GetBaseAddress() {
+static inline uint64_t GetBaseAddress() {
     return (uint64_t)_dyld_get_image_header(0);
 }
 
 // --- PREMIUM MENU THEME ---
-void SetupPremiumTheme() {
-    auto& style = ImGui::GetStyle();
+static void SetupPremiumTheme() {
+    ImGuiStyle& style = ImGui::GetStyle(); // Removed C++11 'auto' keyword
     style.WindowPadding = ImVec2(15, 15);
     style.WindowRounding = 12.0f;
     style.FramePadding = ImVec2(8, 6);
@@ -65,7 +66,7 @@ void SetupPremiumTheme() {
     style.ItemSpacing = ImVec2(10, 10);
     style.GrabRounding = 4.0f;
     
-    auto& colors = style.Colors;
+    ImVec4* colors = style.Colors;
     colors[ImGuiCol_WindowBg]       = ImVec4(0.06f, 0.06f, 0.06f, 0.98f);
     colors[ImGuiCol_FrameBg]        = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
     colors[ImGuiCol_FrameBgHovered] = ImVec4(0.20f, 0.15f, 0.30f, 1.00f);
@@ -176,7 +177,6 @@ static bool MenDeal = true;
         ImFont* font = ImGui::GetFont();
         font->Scale = 15.f / font->FontSize;
 
-        // Apply our custom theme once
         static bool theme_applied = false;
         if (!theme_applied) { SetupPremiumTheme(); theme_applied = true; }
         
@@ -186,14 +186,12 @@ static bool MenDeal = true;
             ImGui::SetNextWindowSize(ImVec2(450, 580), ImGuiCond_FirstUseEver);
             ImGui::Begin("ANIMAL COMPANY BYPASS", &MenDeal, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
             
-            // SMOOTH ANIMATED RGB TITLE
             float time = ImGui::GetTime();
             ImVec4 rgb = ImVec4(sinf(time * 2.0f) * 0.5f + 0.5f, sinf(time * 2.0f + 2.0f) * 0.5f + 0.5f, sinf(time * 2.0f + 4.0f) * 0.5f + 0.5f, 1.0f);
             ImGui::TextColored(rgb, "XMOD INTERNAL BYPASS v1.48");
             ImGui::Separator();
             ImGui::Spacing();
 
-            // TABS
             if (ImGui::Button("SPAWNER", ImVec2(200, 35))) current_tab = 0;
             ImGui::SameLine();
             if (ImGui::Button("EXPLOITS", ImVec2(200, 35))) current_tab = 1;
@@ -210,7 +208,7 @@ static bool MenDeal = true;
                 
                 ImGui::Spacing();
                 
-                ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "2. XMOD PARAMETERS (SBYTE LIMITS)");
+                ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "2. XMOD PARAMETERS");
                 ImGui::SliderInt("Hue", &item_hue, -124, 124);
                 ImGui::SliderInt("Saturation", &item_saturation, -124, 124);
                 ImGui::SliderInt("Size", &item_size, -127, 127);
@@ -225,7 +223,6 @@ static bool MenDeal = true;
 
                 ImGui::Spacing(); ImGui::Spacing();
 
-                // ADVANCED SPAWN BUTTON
                 if (ImGui::Button("EXECUTE NETWORK SPAWN", ImVec2(-1, 50))) {
                     int item_id = GetRealItemID(selected_category, selected_item_idx);
                     Vec3 coords = GetTargetCoordinates(selected_location);
@@ -242,7 +239,7 @@ static bool MenDeal = true;
                 ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "DANGEROUS EXPLOITS");
                 ImGui::Spacing();
 
-                if (ImGui::Button("Trigger Custom Sell (Infinite Nuts)", ImVec2(-1, 40))) {
+                if (ImGui::Button("Trigger Custom Sell", ImVec2(-1, 40))) {
                     uint64_t sell_offset = 0x2A1B4; 
                     void (*ForceSell)(int) = (void (*)(int))(GetBaseAddress() + sell_offset);
                     ForceSell(9999999); 
@@ -253,7 +250,7 @@ static bool MenDeal = true;
         }
         
         ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
-        //chức năng để ở đây
+        (void)draw_list; // This completely prevents the unused variable build crash!
 
         ImGui::Render();
         ImDrawData* draw_data = ImGui::GetDrawData();
