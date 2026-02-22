@@ -5,7 +5,6 @@
 #include "KittyMemory/imgui.h"
 #include "KittyMemory/imgui_impl_metal.h"
 #import "Esp/CaptainHook.h"
-#import "x2nios.h"
 #include <cmath>
 #include <mach-o/dyld.h> 
 
