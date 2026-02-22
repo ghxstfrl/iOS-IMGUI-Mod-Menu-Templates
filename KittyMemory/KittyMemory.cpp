@@ -148,22 +148,22 @@ Memory_Status KittyMemory::memRead(void *buffer, const void *addr, size_t len) {
 
 std::string KittyMemory::read2HexStr(const void *addr, size_t len) {
     std::vector<char> temp(len);
-    memset(temp, 0, len);
+    memset(temp.data(), 0, len);
 
     const size_t bufferLen = len * 2 + 1;
     std::vector<char> buffer(bufferLen);
-    memset(buffer, 0, bufferLen);
+    memset(buffer.data(), 0, bufferLen);
 
     std::string ret;
 
-    if (memRead(temp, addr, len) != SUCCESS)
+    if (memRead(temp.data(), addr, len) != SUCCESS)
         return ret;
 
     for (int i = 0; i < len; i++) {
         sprintf(&buffer[i * 2], "%02X", (unsigned char) temp[i]);
     }
 
-    ret += buffer;
+    ret += buffer.data();
     return ret;
 }
 
