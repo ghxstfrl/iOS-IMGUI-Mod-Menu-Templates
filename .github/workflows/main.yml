@@ -10,23 +10,33 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Dependencies (ldid & dpkg)
-        run: brew install ldid dpkg
+      - name: Install Apple Dependencies
+        run: brew install ldid dpkg make
 
-      - name: Install Apple Theos Compiler
+      - name: Install Theos Compiler & SDKs (Safe Method)
         run: |
-          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
-          git clone https://github.com/theos/sdks.git $HOME/theos/sdks
+          export THEOS=$HOME/theos
+          # 1. Download Theos manually (bypasses installer crashes)
+          git clone --recursive https://github.com/theos/theos.git $THEOS
+          
+          # 2. Download SDKs as a ZIP file to completely avoid Git Error 128
+          curl -LO https://github.com/theos/sdks/archive/refs/heads/master.zip
+          unzip -q master.zip
+          
+          # 3. Move the files perfectly into place
+          mv sdks-master/* $THEOS/sdks/
+          
+          # 4. Tell the Mac where the compiler is
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
 
       - name: Compile Mod Menu
-        run: |
-          make package FINALPACKAGE=1
+        run: make package FINALPACKAGE=1
 
-      - name: Upload Final .dylib File
+      - name: Upload Finished Mod Menu
         uses: actions/upload-artifact@v4
         with:
           name: Animal-Company-Mod-Menu
           path: |
             **/*.dylib
             **/*.deb
+            packages/*.deb
