@@ -16,21 +16,14 @@ jobs:
       - name: Install Theos Compiler & SDKs (Safe Method)
         run: |
           export THEOS=$HOME/theos
-          # 1. Download Theos manually (bypasses installer crashes)
           git clone --recursive https://github.com/theos/theos.git $THEOS
-          
-          # 2. Download SDKs as a ZIP file to completely avoid Git Error 128
           curl -LO https://github.com/theos/sdks/archive/refs/heads/master.zip
           unzip -q master.zip
-          
-          # 3. Move the files perfectly into place
           mv sdks-master/* $THEOS/sdks/
-          
-          # 4. Tell the Mac where the compiler is
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
 
-      - name: Compile Mod Menu
-        run: make package FINALPACKAGE=1
+      - name: Compile Mod Menu (FORCED MAC PATH)
+        run: make package FINALPACKAGE=1 THEOS=$HOME/theos
 
       - name: Upload Finished Mod Menu
         uses: actions/upload-artifact@v4
