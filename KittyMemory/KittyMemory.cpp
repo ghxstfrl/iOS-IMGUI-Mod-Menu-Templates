@@ -8,6 +8,7 @@
 
 #include "KittyMemory.hpp"
 #include <substrate.h>
+#include <vector>
 
 
 using KittyMemory::Memory_Status;
@@ -146,11 +147,11 @@ Memory_Status KittyMemory::memRead(void *buffer, const void *addr, size_t len) {
 
 
 std::string KittyMemory::read2HexStr(const void *addr, size_t len) {
-    char temp[len];
+    std::vector<char> temp(len);
     memset(temp, 0, len);
 
     const size_t bufferLen = len * 2 + 1;
-    char buffer[bufferLen];
+    std::vector<char> buffer(bufferLen);
     memset(buffer, 0, bufferLen);
 
     std::string ret;
