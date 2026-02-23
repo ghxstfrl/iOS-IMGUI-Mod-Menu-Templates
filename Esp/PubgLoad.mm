@@ -1,3 +1,4 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
 diff --git a/Esp/PubgLoad.mm b/Esp/PubgLoad.mm
 index 19ca25b2db036594f62d2558c77af35348c3a3a3..107d3d90806b15594a8f3c5f451f0f4543a62578 100644
 --- a/Esp/PubgLoad.mm
@@ -307,3 +308,6 @@ index 19ca25b2db036594f62d2558c77af35348c3a3a3..107d3d90806b15594a8f3c5f451f0f45
 +    [ImGuiDrawView showChange:true];
  }
  @end
+ 
+EOF
+)
