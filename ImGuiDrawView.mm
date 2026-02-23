@@ -76,7 +76,7 @@ static inline uint64_t GetBaseAddress() {
 
 @implementation ImGuiDrawView
 
-static bool MenDeal = true;
+static bool MenDeal = false;
 static bool showMenu = false; // keeps track for showChange
 
 + (void)showChange:(BOOL)open {
