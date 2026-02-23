@@ -3,7 +3,7 @@
 
 @interface ImGuiDrawView : UIViewController <MTKViewDelegate>
 
-// This must be declared so PubgLoad.mm sees it
+// Needed for PubgLoad.mm toggle
 + (void)showChange:(BOOL)open;
 
 @end
