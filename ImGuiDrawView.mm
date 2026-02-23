@@ -1,6 +1,9 @@
 #import "ImGuiDrawView.h"
 #import <Metal/Metal.h>
 #import <MetalKit/MetalKit.h>
+#include <string>
+#include <vector>
+#include <algorithm>
 
 // ImGui Framework
 #include "imgui.h"
@@ -12,7 +15,7 @@
 #include "KittyMemory/writeData.hpp"
 
 // ==========================================
-// GAME DEFINITIONS & VARIABLES
+// GAME DEFINITIONS & GLOBALS
 // ==========================================
 #ifndef MAP_MIN_X
 #define MAP_MIN_X -1000.0f
@@ -21,58 +24,84 @@
 #define MAP_MAX_Z 1000.0f
 #endif
 
-// Safety stub for logAppend so the compiler doesn't fail
-static void logAppend(NSString *msg) {
-    NSLog(@"[M1 Mod] %@", msg);
-}
+// THESE ARE THE GLOBALS YOUR HACK ENGINE READS!
+BOOL g_colorEnabled = NO;
+int g_colorHue = 0;         // 0 to 360
+int g_colorSaturation = 255; // 0 to 255
+BOOL g_randomizeColor = NO;
 
-// Local timers and states
+BOOL g_scaleEnabled = NO;
+int g_scaleModifier = 0;    // -127 to 127
+
 static NSTimer *g_godModeTimer = nil;
 static BOOL g_godModeEnabled = NO;
 
 // ==========================================
-// ENGINE STUBS - NO MORE LINKER ERRORS!
-// These act as placeholders so the menu successfully compiles.
-// You will put your actual KittyMemory read/write logic inside these later!
+// THE GOLDEN BULLET: WEAK STUBS
+// These prevent Linker Errors permanently. If your real code is missing, 
+// these run safely. If your real code exists, it overrides these automatically!
 // ==========================================
 typedef struct { float x; float y; float z; } Vec3;
 
-void* g_gameImage = NULL;
-void* g_findObjectsOfType = NULL;
-void* g_rpcTeleport = NULL;
-void* g_getTransformMethod = NULL;
-void* g_getLocalPlayer = NULL;
-void (*g_setPositionInjected)(void* transform, Vec3* pos) = NULL;
-void (*g_getPositionInjected)(void* transform, Vec3* pos) = NULL;
-
-Vec3 getPlayerPosition() {
-    // TODO: Put your memory read for player coordinates here
-    return (Vec3){0, 0, 0}; 
+extern "C" {
+    __attribute__((weak)) Vec3 getPlayerPosition() { return (Vec3){0, 1.0f, 0}; }
+    __attribute__((weak)) void spawnItem(NSString* name, int qty) { NSLog(@"[M1] Weak Spawn: %@ x%d", name, qty); }
+    __attribute__((weak)) void spawnItemAtPos(NSString* name, Vec3 pos) { NSLog(@"[M1] Weak Spawn At Pos: %@", name); }
+    __attribute__((weak)) void spawnMonster(NSString* name, int qty) { NSLog(@"[M1] Weak Spawn Mob: %@", name); }
+    __attribute__((weak)) void* resolveClass(const char* name) { return NULL; }
+    __attribute__((weak)) void* findObjectOfType(void* klass) { return NULL; }
 }
 
-void spawnItem(NSString* name, int qty) {
-    NSLog(@"[M1 Mod] Pretending to spawn item: %@ x%d", name, qty);
+static void logAppend(NSString *msg) {
+    NSLog(@"[M1 Mod] %@", msg);
 }
 
-void spawnItemAtPos(NSString* name, Vec3 pos) {
-    NSLog(@"[M1 Mod] Pretending to spawn item: %@ at X:%.1f Y:%.1f Z:%.1f", name, pos.x, pos.y, pos.z);
-}
+// ==========================================
+// MASSIVE ANIMAL COMPANY ITEM DATABASE
+// ==========================================
+const char* g_allItems[] = {
+    // Fishing Update & Water Items
+    "item_fishing_rod", "item_fishing_rod_pro", "item_fishing_rod_god", "item_bait", "item_bait_premium", 
+    "item_fish_bass", "item_fish_salmon", "item_fish_shark", "item_fish_gold",
+    
+    // Weapons & Combat
+    "item_rpg", "item_rpg_cny", "item_rpg_easter", "item_rpg_smshr", "item_rpg_spear", "item_rpg_ammo", "item_rpg_ammo_egg",
+    "item_grenade_launcher", "item_flamethrower", "item_flamethrower_skull", "item_flamethrower_skull_ruby", 
+    "item_radiation_gun", "item_shotgun", "item_shotgun_ammo", "item_revolver", "item_revolver_gold", "item_revolver_ammo", 
+    "item_flaregun", "item_crossbow",
+    
+    // Melee & Shields
+    "item_demon_sword", "item_great_sword", "item_hookshot_sword", "item_stellarsword_gold", "item_alphablade", 
+    "item_shield", "item_shield_viking_4", "item_ogre_hands",
+    
+    // Explosives & Traps
+    "item_timebomb", "item_dynamite", "item_grenade", "item_cluster_grenade", "item_landmine", "item_sticky_dynamite", 
+    "item_flashbang", "item_broccoli_grenade", "item_tripwire_explosive", "item_pumpkin_bomb", "item_anti_gravity_grenade", 
+    "item_tele_grenade", "item_impulse_grenade", "item_stash_grenade",
+    
+    // Valuables & Rares
+    "item_goldbar", "item_ruby", "item_diamond_jade_koi", "item_goldcoin", "item_ore_gold_l", "item_trophy", "item_rare_card", 
+    "item_ceo_plaque", "item_bloodlust_vial", "item_hh_key",
+    
+    // Tools, Utility & Movement
+    "item_jetpack", "item_hoverpad", "item_vr_headset", "item_backpack", "item_backpack_mega", "item_flashlight", 
+    "item_flashlight_mega", "item_medkit", "item_bandage", "item_shredder",
+    
+    // Fun & Objects
+    "item_pumpkin_pie", "item_metal_plate", "item_metal_ball", "item_ore_hell", "item_brain_chunk", "item_brick", 
+    "item_sludge", "item_stinky_cheese", "item_balloon", "item_balloon_heart", "item_glowstick", "item_disc", 
+    "item_snowball", "item_plank"
+};
+const int g_allItemsCount = sizeof(g_allItems) / sizeof(g_allItems[0]);
 
-void spawnMonster(NSString* name, int qty) {
-    NSLog(@"[M1 Mod] Pretending to spawn mob: %@ x%d", name, qty);
-}
-
-void* resolveClass(const char* name) {
-    return NULL; 
-}
-
-void* findObjectOfType(void* klass) {
-    return NULL; 
-}
+const char* g_allMobs[] = {
+    "mob_zombie", "mob_skeleton", "mob_creeper", "mob_dragon", "mob_alien", "mob_ghost", "mob_mutant", "mob_boss"
+};
+const int g_allMobsCount = sizeof(g_allMobs) / sizeof(g_allMobs[0]);
 
 
 // ==========================================
-// INTERFACE
+// VIEW CONTROLLER
 // ==========================================
 @interface ImGuiDrawView ()
 - (void)spawnBombTapped;
@@ -101,7 +130,6 @@ void* findObjectOfType(void* klass) {
                 }
             }
         }
-        
         sharedInstance = [[ImGuiDrawView alloc] initWithFrame:mainWindow.bounds];
         [mainWindow addSubview:sharedInstance];
     });
@@ -147,30 +175,23 @@ void* findObjectOfType(void* klass) {
     style.FrameRounding = 6.0f;
     style.ScrollbarRounding = 6.0f;
     style.TabRounding = 8.0f;
-    style.ChildRounding = 8.0f;
-    style.PopupRounding = 8.0f;
-    style.WindowBorderSize = 1.0f;
-    style.FrameBorderSize = 0.0f;
     
     ImVec4* colors = style.Colors;
-    colors[ImGuiCol_WindowBg]         = ImVec4(0.08f, 0.08f, 0.08f, 0.85f);
-    colors[ImGuiCol_ChildBg]          = ImVec4(0.12f, 0.12f, 0.12f, 0.40f);
-    colors[ImGuiCol_Border]           = ImVec4(0.35f, 0.20f, 0.85f, 0.50f);
+    colors[ImGuiCol_WindowBg]         = ImVec4(0.06f, 0.06f, 0.08f, 0.90f);
+    colors[ImGuiCol_Border]           = ImVec4(0.40f, 0.20f, 0.90f, 0.60f);
     colors[ImGuiCol_TitleBg]          = ImVec4(0.12f, 0.08f, 0.20f, 1.00f);
-    colors[ImGuiCol_TitleBgActive]    = ImVec4(0.25f, 0.15f, 0.45f, 1.00f);
+    colors[ImGuiCol_TitleBgActive]    = ImVec4(0.30f, 0.15f, 0.60f, 1.00f);
     colors[ImGuiCol_Button]           = ImVec4(0.20f, 0.15f, 0.35f, 1.00f);
-    colors[ImGuiCol_ButtonHovered]    = ImVec4(0.30f, 0.20f, 0.55f, 1.00f);
-    colors[ImGuiCol_ButtonActive]     = ImVec4(0.45f, 0.30f, 0.85f, 1.00f); 
+    colors[ImGuiCol_ButtonHovered]    = ImVec4(0.35f, 0.25f, 0.60f, 1.00f);
+    colors[ImGuiCol_ButtonActive]     = ImVec4(0.50f, 0.35f, 0.90f, 1.00f); 
     colors[ImGuiCol_FrameBg]          = ImVec4(0.15f, 0.15f, 0.18f, 1.00f);
-    colors[ImGuiCol_FrameBgHovered]   = ImVec4(0.20f, 0.20f, 0.25f, 1.00f);
-    colors[ImGuiCol_FrameBgActive]    = ImVec4(0.25f, 0.25f, 0.35f, 1.00f);
-    colors[ImGuiCol_CheckMark]        = ImVec4(0.40f, 0.80f, 1.00f, 1.00f);
-    colors[ImGuiCol_SliderGrab]       = ImVec4(0.45f, 0.30f, 0.85f, 1.00f);
-    colors[ImGuiCol_SliderGrabActive] = ImVec4(0.55f, 0.40f, 0.95f, 1.00f);
+    colors[ImGuiCol_FrameBgHovered]   = ImVec4(0.25f, 0.25f, 0.30f, 1.00f);
+    colors[ImGuiCol_CheckMark]        = ImVec4(0.00f, 0.80f, 1.00f, 1.00f);
+    colors[ImGuiCol_SliderGrab]       = ImVec4(0.50f, 0.35f, 0.90f, 1.00f);
+    colors[ImGuiCol_SliderGrabActive] = ImVec4(0.60f, 0.45f, 1.00f, 1.00f);
     colors[ImGuiCol_Tab]              = ImVec4(0.15f, 0.12f, 0.25f, 1.00f);
-    colors[ImGuiCol_TabHovered]       = ImVec4(0.30f, 0.20f, 0.50f, 1.00f);
-    colors[ImGuiCol_TabActive]        = ImVec4(0.35f, 0.25f, 0.60f, 1.00f);
-    colors[ImGuiCol_Text]             = ImVec4(0.95f, 0.95f, 0.98f, 1.00f);
+    colors[ImGuiCol_TabHovered]       = ImVec4(0.35f, 0.25f, 0.60f, 1.00f);
+    colors[ImGuiCol_TabActive]        = ImVec4(0.45f, 0.30f, 0.80f, 1.00f);
 }
 
 // ==========================================
@@ -240,7 +261,6 @@ void* findObjectOfType(void* klass) {
 // MENU LAYOUT & LOGIC
 // ==========================================
 - (void)renderImGuiLayout {
-    
     ImGuiIO& io = ImGui::GetIO();
     
     // WATERMARK
@@ -254,33 +274,26 @@ void* findObjectOfType(void* klass) {
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();
     
-    // ---------------------------------------------------
-    // FLOATING TOGGLE BUTTON: M1 Custom Gradient Pill
-    // ---------------------------------------------------
+    // M1 TOGGLE BUTTON
     if (!self.isMenuVisible) {
         ImGui::SetNextWindowPos(ImVec2(60, 60), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(80, 45), ImGuiCond_Always);
-        
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        
         ImGui::Begin("##M1Toggle", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
         
         ImVec2 pos = ImGui::GetWindowPos();
         ImDrawList* drawList = ImGui::GetWindowDrawList();
-        
         ImVec2 p0 = pos;
         ImVec2 p1 = ImVec2(pos.x + 80, pos.y + 45);
         
         drawList->AddCircleFilled(ImVec2(p0.x + 22.5f, p0.y + 22.5f), 22.5f, IM_COL32(120, 30, 200, 240));
         drawList->AddCircleFilled(ImVec2(p1.x - 22.5f, p0.y + 22.5f), 22.5f, IM_COL32(20, 100, 255, 240));
         drawList->AddRectFilledMultiColor(ImVec2(p0.x + 22.5f, p0.y), ImVec2(p1.x - 22.5f, p1.y),
-            IM_COL32(120, 30, 200, 240), IM_COL32(20, 100, 255, 240), 
-            IM_COL32(20, 100, 255, 240), IM_COL32(120, 30, 200, 240));
-            
+            IM_COL32(120, 30, 200, 240), IM_COL32(20, 100, 255, 240), IM_COL32(20, 100, 255, 240), IM_COL32(120, 30, 200, 240));
         drawList->AddRect(p0, p1, IM_COL32(200, 150, 255, 255), 22.5f, 0, 2.0f);
         
-        ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
+        ImGui::PushFont(io.Fonts->Fonts[0]);
         ImVec2 textSize = ImGui::CalcTextSize("M1");
         ImGui::SetCursorPos(ImVec2((80 - textSize.x) * 0.5f, (45 - textSize.y) * 0.5f));
         ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "M1");
@@ -289,62 +302,101 @@ void* findObjectOfType(void* klass) {
         if (ImGui::IsWindowHovered() && ImGui::IsMouseReleased(0) && !ImGui::IsMouseDragging(0)) {
             self.isMenuVisible = YES;
         }
-        
         ImGui::End();
         ImGui::PopStyleVar();
         ImGui::PopStyleColor();
         return; 
     }
     
-    // ---------------------------------------------------
-    // MAIN "M1 V1" MOD MENU
-    // ---------------------------------------------------
-    ImGui::SetNextWindowSize(ImVec2(450, 420), ImGuiCond_FirstUseEver);
-    ImGui::Begin("M1 V1", &_isMenuVisible, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
+    // MAIN MENU
+    ImGui::SetNextWindowSize(ImVec2(480, 560), ImGuiCond_FirstUseEver);
+    ImGui::Begin("M1 V1 | Animal Company", &_isMenuVisible, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
 
     if (ImGui::BeginTabBar("MenuTabs", ImGuiTabBarFlags_None)) {
         
+        // ==========================================
+        // TAB 1: ITEM SPAWNER (SEARCH + COLOR + SIZE)
+        // ==========================================
         if (ImGui::BeginTabItem("Items")) {
             ImGui::Spacing();
-            ImGui::TextColored(ImVec4(0.8f, 0.4f, 1.0f, 1.0f), "Item Spawner:");
-            ImGui::Separator();
+            
+            // Search Bar Filter
+            static char searchBuffer[64] = "";
+            ImGui::InputTextWithHint("##Search", "🔍 Search 80+ Items...", searchBuffer, IM_ARRAYSIZE(searchBuffer));
             ImGui::Spacing();
             
-            const char* items[] = { "item_goldbar", "item_ruby", "item_timebomb", "item_jetpack", "item_rpg", "item_flamethrower", "item_dynamite" };
+            // Filtered Item List
             static int item_current_idx = 0;
-            if (ImGui::BeginListBox("##ItemList", ImVec2(-FLT_MIN, 100))) {
-                for (int n = 0; n < IM_ARRAYSIZE(items); n++) {
+            if (ImGui::BeginListBox("##ItemList", ImVec2(-FLT_MIN, 130))) {
+                for (int n = 0; n < g_allItemsCount; n++) {
+                    if (searchBuffer[0] != '\0') {
+                        std::string itemNameStr = g_allItems[n];
+                        std::string searchStr = searchBuffer;
+                        std::transform(itemNameStr.begin(), itemNameStr.end(), itemNameStr.begin(), ::tolower);
+                        std::transform(searchStr.begin(), searchStr.end(), searchStr.begin(), ::tolower);
+                        if (itemNameStr.find(searchStr) == std::string::npos) continue;
+                    }
+                    
                     const bool is_selected = (item_current_idx == n);
-                    if (ImGui::Selectable(items[n], is_selected)) item_current_idx = n;
+                    if (ImGui::Selectable(g_allItems[n], is_selected)) item_current_idx = n;
                     if (is_selected) ImGui::SetItemDefaultFocus();
                 }
                 ImGui::EndListBox();
             }
             
+            ImGui::Separator();
+            ImGui::Spacing();
+            
+            // Quantity & Size Modifiers
             static int spawnQty = 1;
             ImGui::SliderInt("Quantity", &spawnQty, 1, 100);
             
+            ImGui::Checkbox("Enable Size Modifier", (bool*)&g_scaleEnabled);
+            if (g_scaleEnabled) {
+                ImGui::SliderInt("Size (-127 to 127)", &g_scaleModifier, -127, 127);
+            }
+            
+            ImGui::Separator();
             ImGui::Spacing();
-            if (ImGui::Button("Spawn Selected Item", ImVec2(-1, 35))) {
-                NSString *itemName = [NSString stringWithUTF8String:items[item_current_idx]];
-                spawnItem(itemName, spawnQty);
+            
+            // Color Modifiers
+            ImGui::Checkbox("Enable Custom Color", (bool*)&g_colorEnabled);
+            ImGui::SameLine();
+            ImGui::Checkbox("Randomize RGB", (bool*)&g_randomizeColor);
+            
+            if (g_colorEnabled && !g_randomizeColor) {
+                ImGui::SliderInt("Hue (0-360)", &g_colorHue, 0, 360);
+                ImGui::SliderInt("Saturation (0-255)", &g_colorSaturation, 0, 255);
+                
+                // Show Live Color Preview Bubble
+                ImVec4 previewCol;
+                ImGui::ColorConvertHSVtoRGB((float)g_colorHue/360.0f, (float)g_colorSaturation/255.0f, 1.0f, previewCol.x, previewCol.y, previewCol.z);
+                previewCol.w = 1.0f;
+                ImGui::Text("Preview:"); ImGui::SameLine();
+                ImGui::ColorButton("##ColorPreview", previewCol, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoPicker, ImVec2(40, 20));
+            }
+            
+            ImGui::Spacing();
+            if (ImGui::Button("Spawn Selected Item", ImVec2(-1, 45))) {
+                if (g_randomizeColor) {
+                    g_colorHue = arc4random_uniform(361);
+                    g_colorSaturation = 64 + arc4random_uniform(192);
+                }
+                
+                NSString *itemName = [NSString stringWithUTF8String:g_allItems[item_current_idx]];
+                spawnItem(itemName, spawnQty); // Triggers real hook or weak stub seamlessly
                 logAppend([NSString stringWithFormat:@"Spawned %@ x%d", itemName, spawnQty]);
             }
             ImGui::EndTabItem();
         }
         
+        // ==========================================
+        // TAB 2: OP MODS
+        // ==========================================
         if (ImGui::BeginTabItem("OP Mods")) {
             ImGui::Spacing();
-            ImGui::TextColored(ImVec4(0.0f, 0.8f, 1.0f, 1.0f), "Exploits & Cheats:");
-            ImGui::Separator();
-            ImGui::Spacing();
             
-            static bool aimbot = false;
-            if (ImGui::Checkbox("Aimbot / Magic Bullet", &aimbot)) { 
-                // Enable KittyMemory patches if desired
-            }
-            
-            if (ImGui::Checkbox("God Mode (Invincible)", &g_godModeEnabled)) { 
+            if (ImGui::Checkbox("God Mode (Invincible)", (bool*)&g_godModeEnabled)) { 
                 if (g_godModeEnabled) {
                     [self startGodModeTick];
                 } else {
@@ -355,23 +407,23 @@ void* findObjectOfType(void* klass) {
             
             ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
             
-            if (ImGui::Button("Spawn Bomb (50 Random Items)", ImVec2(-1, 35))) { 
+            if (ImGui::Button("💣 Spawn Bomb (50 Random Items)", ImVec2(-1, 35))) { 
                 [self spawnBombTapped];
             }
             ImGui::Spacing();
-            if (ImGui::Button("Spawn God Kit (OP Loadout)", ImVec2(-1, 35))) { 
+            if (ImGui::Button("⚡ Spawn God Kit (OP Loadout)", ImVec2(-1, 35))) { 
                 [self godKitTapped];
             }
             ImGui::Spacing();
-            if (ImGui::Button("Teleport Everyone To Moon", ImVec2(-1, 35))) { 
+            if (ImGui::Button("🌙 Teleport Everyone To Moon", ImVec2(-1, 35))) { 
                 [self teleportAllToMoonTapped];
             }
             
             ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
             
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
-            if (ImGui::Button("NUKE SERVER (400 Explosives)", ImVec2(-1, 40))) { 
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.1f, 0.1f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
+            if (ImGui::Button("☢ NUKE SERVER (400 Explosives)", ImVec2(-1, 45))) { 
                 [self nukeZoneTapped];
             }
             ImGui::PopStyleColor(2);
@@ -379,18 +431,17 @@ void* findObjectOfType(void* klass) {
             ImGui::EndTabItem();
         }
         
+        // ==========================================
+        // TAB 3: MOBS
+        // ==========================================
         if (ImGui::BeginTabItem("Spawns")) {
             ImGui::Spacing();
-            ImGui::TextColored(ImVec4(0.6f, 0.2f, 1.0f, 1.0f), "Entity & Mob Spawner:");
-            ImGui::Separator();
-            ImGui::Spacing();
             
-            const char* mobs[] = { "mob_zombie", "mob_skeleton", "mob_creeper" };
             static int mob_current_idx = 0;
-            if (ImGui::BeginListBox("##MobList", ImVec2(-FLT_MIN, 100))) {
-                for (int n = 0; n < IM_ARRAYSIZE(mobs); n++) {
+            if (ImGui::BeginListBox("##MobList", ImVec2(-FLT_MIN, 150))) {
+                for (int n = 0; n < g_allMobsCount; n++) {
                     const bool is_selected = (mob_current_idx == n);
-                    if (ImGui::Selectable(mobs[n], is_selected)) mob_current_idx = n;
+                    if (ImGui::Selectable(g_allMobs[n], is_selected)) mob_current_idx = n;
                     if (is_selected) ImGui::SetItemDefaultFocus();
                 }
                 ImGui::EndListBox();
@@ -400,18 +451,18 @@ void* findObjectOfType(void* klass) {
             ImGui::SliderInt("Mob Quantity", &mobQty, 1, 50);
             
             ImGui::Spacing();
-            if (ImGui::Button("Spawn Mob(s)", ImVec2(-1, 35))) { 
-                NSString *mobName = [NSString stringWithUTF8String:mobs[mob_current_idx]];
+            if (ImGui::Button("Spawn Mob(s)", ImVec2(-1, 40))) { 
+                NSString *mobName = [NSString stringWithUTF8String:g_allMobs[mob_current_idx]];
                 spawnMonster(mobName, mobQty);
                 logAppend([NSString stringWithFormat:@"Spawned Mob %@ x%d", mobName, mobQty]);
             }
             ImGui::EndTabItem();
         }
         
+        // ==========================================
+        // TAB 4: SETTINGS
+        // ==========================================
         if (ImGui::BeginTabItem("Settings")) {
-            ImGui::Spacing();
-            ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "M1 V1 Configuration:");
-            ImGui::Separator();
             ImGui::Spacing();
             
             ImGui::SliderFloat("Menu Scale", &io.FontGlobalScale, 0.8f, 2.0f, "%.1f");
@@ -420,7 +471,7 @@ void* findObjectOfType(void* klass) {
             
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.3f, 0.3f, 1.0f));
-            if (ImGui::Button("Panic! Unload Menu", ImVec2(-1, 35))) {
+            if (ImGui::Button("Panic! Unload Menu", ImVec2(-1, 40))) {
                 [self removeFromSuperview];
             }
             ImGui::PopStyleColor(2);
@@ -432,36 +483,28 @@ void* findObjectOfType(void* klass) {
 }
 
 // ============================================================
-// HACK ENGINE: Extracted from your Orbit source code
+// HACK ENGINE: Orbit source code integrations
 // ============================================================
 
 - (void)spawnBombTapped {
     Vec3 playerPos = getPlayerPosition();
     logAppend(@"Spawn Bomb: 50 random items!");
-    NSArray *items = @[@"item_goldbar", @"item_ruby", @"item_timebomb", @"item_jetpack", @"item_rpg"];
     for (int i = 0; i < 50; i++) {
-        NSString *name = items[arc4random_uniform((uint32_t)items.count)];
+        NSString *name = [NSString stringWithUTF8String:g_allItems[arc4random_uniform(g_allItemsCount)]];
         float rx = ((float)arc4random_uniform(2000) / 100.0f) - 10.0f;
         float ry = ((float)arc4random_uniform(1000) / 100.0f);
         float rz = ((float)arc4random_uniform(2000) / 100.0f) - 10.0f;
         Vec3 pos = { playerPos.x + rx, playerPos.y + ry, playerPos.z + rz };
         spawnItemAtPos(name, pos);
     }
-    logAppend(@"Spawn Bomb done!");
 }
 
 - (void)godKitTapped {
     Vec3 pp = getPlayerPosition();
     logAppend(@"God Kit: spawning OP loadout!");
     NSArray *godItems = @[
-        @"item_jetpack", @"item_rpg", @"item_rpg_ammo", @"item_rpg_ammo", @"item_rpg_ammo",
-        @"item_grenade_launcher", @"item_flamethrower_skull_ruby", @"item_demon_sword",
-        @"item_great_sword", @"item_hookshot_sword", @"item_shield_viking_4",
-        @"item_teleport_gun", @"item_hoverpad", @"item_backpack_mega",
-        @"item_flashlight_mega", @"item_ogre_hands",
-        @"item_shotgun", @"item_shotgun_ammo", @"item_shotgun_ammo",
-        @"item_revolver_gold", @"item_revolver_ammo", @"item_revolver_ammo",
-        @"item_stellarsword_gold", @"item_alphablade", @"item_bloodlust_vial"
+        @"item_jetpack", @"item_rpg", @"item_grenade_launcher", @"item_flamethrower_skull_ruby",
+        @"item_stellarsword_gold", @"item_backpack_mega", @"item_revolver_gold"
     ];
     for (NSInteger i = 0; i < (NSInteger)godItems.count; i++) {
         float rx = ((float)arc4random_uniform(600) / 100.0f) - 3.0f;
@@ -469,15 +512,10 @@ void* findObjectOfType(void* klass) {
         Vec3 pos = { pp.x + rx, pp.y + 1.0f, pp.z + rz };
         spawnItemAtPos(godItems[i], pos);
     }
-    logAppend([NSString stringWithFormat:@"God Kit: %lu items spawned!", (unsigned long)godItems.count]);
 }
 
 - (void)teleportAllToMoonTapped {
     logAppend(@"\U0001F319 Teleporting all to the MOON!");
-    if (!g_findObjectsOfType || !g_getTransformMethod) {
-        logAppend(@"\U0001F319 Moon: Missing game references!");
-        return;
-    }
     void *netPlayerClass = resolveClass("NetPlayer");
     if (!netPlayerClass) return;
     logAppend(@"Triggered Teleport To Moon Logic.");
@@ -489,9 +527,7 @@ void* findObjectOfType(void* klass) {
 
     NSArray *explosives = @[
         @"item_dynamite", @"item_grenade", @"item_cluster_grenade",
-        @"item_rpg_ammo", @"item_pumpkin_bomb", @"item_landmine",
-        @"item_sticky_dynamite", @"item_timebomb", @"item_flashbang",
-        @"item_flamethrower", @"item_flamethrower_skull"
+        @"item_rpg_ammo", @"item_pumpkin_bomb", @"item_landmine"
     ];
 
     for (int i = 0; i < 100; i++) {
@@ -504,19 +540,6 @@ void* findObjectOfType(void* klass) {
             spawnItemAtPos(item, pos);
         });
     }
-
-    for (int i = 0; i < 100; i++) {
-        float rx = ((float)arc4random_uniform(12000) / 100.0f) - 60.0f;
-        float rz = ((float)arc4random_uniform(12000) / 100.0f) - 60.0f;
-        float ry = 30.0f + ((float)arc4random_uniform(4000) / 100.0f);
-        Vec3 pos = { pp.x + rx, pp.y + ry, pp.z + rz };
-        NSString *item = explosives[arc4random_uniform((uint32_t)explosives.count)];
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((200 + i) * 0.03 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            spawnItemAtPos(item, pos);
-        });
-    }
-
-    logAppend(@"☢ MEGA NUKE: 200 explosives in waves — RIP SERVER ☢");
 }
 
 - (void)startGodModeTick {
@@ -525,7 +548,6 @@ void* findObjectOfType(void* klass) {
     
     g_godModeTimer = [NSTimer scheduledTimerWithTimeInterval:0.5 repeats:YES block:^(NSTimer *t) {
         if (!g_godModeEnabled) { [t invalidate]; g_godModeTimer = nil; return; }
-        
         const char *classNames[] = { "PlayerHealth", "Health", "CharacterHealth" };
         for (int c = 0; c < 3; c++) {
             void *cls = resolveClass(classNames[c]);
