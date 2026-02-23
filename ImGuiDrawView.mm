@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <dlfcn.h>
 
 // ImGui Framework
 #include "imgui.h"
@@ -43,10 +44,94 @@ static BOOL g_godModeEnabled = NO;
 // ==========================================
 typedef struct { float x; float y; float z; } Vec3;
 
+typedef struct { float x; float y; float z; float w; } Quat;
+
+typedef void* (*il2cpp_domain_get_t)();
+typedef void** (*il2cpp_domain_get_assemblies_t)(void* domain, size_t* size);
+typedef void* (*il2cpp_assembly_get_image_t)(void* assembly);
+typedef void* (*il2cpp_class_from_name_t)(void* image, const char* namespaze, const char* name);
+typedef void* (*il2cpp_class_get_method_from_name_t)(void* klass, const char* name, int argsCount);
+typedef void* (*il2cpp_runtime_invoke_t)(void* method, void* obj, void** params, void** exc);
+typedef void* (*il2cpp_string_new_t)(const char* str);
+
+static void* get_il2cpp_method(const char* className, const char* methodName, int argsCount) {
+    il2cpp_domain_get_t domain_get = (il2cpp_domain_get_t)dlsym(RTLD_DEFAULT, "il2cpp_domain_get");
+    il2cpp_domain_get_assemblies_t get_assemblies = (il2cpp_domain_get_assemblies_t)dlsym(RTLD_DEFAULT, "il2cpp_domain_get_assemblies");
+    il2cpp_assembly_get_image_t get_image = (il2cpp_assembly_get_image_t)dlsym(RTLD_DEFAULT, "il2cpp_assembly_get_image");
+    il2cpp_class_from_name_t class_from_name = (il2cpp_class_from_name_t)dlsym(RTLD_DEFAULT, "il2cpp_class_from_name");
+    il2cpp_class_get_method_from_name_t get_method = (il2cpp_class_get_method_from_name_t)dlsym(RTLD_DEFAULT, "il2cpp_class_get_method_from_name");
+
+    if (!domain_get || !get_assemblies || !get_image || !class_from_name || !get_method) return NULL;
+
+    void* domain = domain_get();
+    size_t size = 0;
+    void** assemblies = get_assemblies(domain, &size);
+    if (!assemblies) return NULL;
+
+    for (size_t i = 0; i < size; ++i) {
+        void* image = get_image(assemblies[i]);
+        if (!image) continue;
+
+        void* klass = class_from_name(image, "", className);
+        if (!klass) klass = class_from_name(image, "AnimalCompany", className);
+
+        if (klass) {
+            void* method = get_method(klass, methodName, argsCount);
+            if (method) return method;
+        }
+    }
+
+    return NULL;
+}
+
 extern "C" {
     __attribute__((weak)) Vec3 getPlayerPosition() { return (Vec3){0, 1.0f, 0}; }
     __attribute__((weak)) void spawnItem(NSString* name, int qty) { NSLog(@"[M1] Weak Spawn: %@ x%d", name, qty); }
     __attribute__((weak)) void spawnItemAtPos(NSString* name, Vec3 pos) { NSLog(@"[M1] Weak Spawn At Pos: %@", name); }
+
+    void spawnItemAtPos(NSString* name, Vec3 pos) {
+        il2cpp_string_new_t string_new = (il2cpp_string_new_t)dlsym(RTLD_DEFAULT, "il2cpp_string_new");
+        il2cpp_runtime_invoke_t runtime_invoke = (il2cpp_runtime_invoke_t)dlsym(RTLD_DEFAULT, "il2cpp_runtime_invoke");
+        if (!string_new || !runtime_invoke) {
+            NSLog(@"[M1 Mod] ERROR: Could not load il2cpp API!");
+            return;
+        }
+
+        void* nameStr = string_new([name UTF8String]);
+        Quat rot = {0, 0, 0, 1};
+
+        void* spawnMethod = get_il2cpp_method("PrefabGenerator", "RPC_GeneratePrefab", 4);
+        if (!spawnMethod) spawnMethod = get_il2cpp_method("PrefabGenerator", "GeneratePrefab", 4);
+        if (!spawnMethod) spawnMethod = get_il2cpp_method("ItemSpawner", "SpawnItem", 4);
+
+        if (spawnMethod) {
+            void* exception = NULL;
+            void* params[] = { nameStr, &pos, &rot, NULL };
+            runtime_invoke(spawnMethod, NULL, params, &exception);
+
+            if (!exception) {
+                NSLog(@"[M1 Mod] SUCCESS! Spawned %@ at %.1f, %.1f, %.1f", name, pos.x, pos.y, pos.z);
+                return;
+            }
+
+            NSLog(@"[M1 Mod] Spawn method fired, but game threw an exception.");
+            return;
+        }
+
+        NSLog(@"[M1 Mod] FAILED: Could not find PrefabGenerator.RPC_GeneratePrefab in game memory.");
+    }
+
+    void spawnItem(NSString* name, int qty) {
+        Vec3 pos = getPlayerPosition();
+        for (int i = 0; i < qty; i++) {
+            Vec3 spreadPos = pos;
+            spreadPos.x += ((float)arc4random_uniform(200) / 100.0f) - 1.0f;
+            spreadPos.z += ((float)arc4random_uniform(200) / 100.0f) - 1.0f;
+            spreadPos.y += 1.0f;
+            spawnItemAtPos(name, spreadPos);
+        }
+    }
+
     __attribute__((weak)) void spawnMonster(NSString* name, int qty) { NSLog(@"[M1] Weak Spawn Mob: %@", name); }
     __attribute__((weak)) void* resolveClass(const char* name) { return NULL; }
     __attribute__((weak)) void* findObjectOfType(void* klass) { return NULL; }
