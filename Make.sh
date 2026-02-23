@@ -1,3 +1,4 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
 diff --git a/Make.sh b/Make.sh
 old mode 100644
 new mode 100755
@@ -20,3 +21,6 @@ index e38158cdf9325213e9231e0679c7a560e411ee63..354c23c15b0fe4478595784f8510e202
 +fi
 +
 +make clean package install
+ 
+EOF
+)
