@@ -79,6 +79,11 @@ static inline uint64_t GetBaseAddress() {
 
 @implementation ImGuiDrawView
 
+// Restore old interface so other files still compile
++ (void)showChange:(BOOL)open {
+    menuVisible = open;
+}
+
 - (instancetype)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil {
     self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
     if (!self) return nil;
