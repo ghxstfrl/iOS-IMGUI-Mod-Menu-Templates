@@ -17,9 +17,11 @@ static int selected_location = 0;
 static int item_hue = 0;
 static int item_saturation = 0;
 static int item_size = 0;
+static struct Vec3 { float x, y, z; } custom_coords = {0.0f, 0.0f, 0.0f};
 
-struct Vec3 { float x, y, z; };
-static float custom_coords[3] = { 0.0f, 0.0f, 0.0f };
+// Static bool for ImGui window (fixes property address compile error)
+static bool menuVisible = false;
+static ImVec2 menuPos = ImVec2(100, 100); // initial menu position
 
 static const char* locations[] = {
     "On Player (Local)", "Inside Selling Machine", "Ship / Safety Zone",
@@ -54,13 +56,13 @@ static inline int GetRealItemID(int category, int index) {
     return (category * 100) + index;
 }
 
-static inline Vec3 GetTargetCoordinates(int loc_idx) {
-    Vec3 coords = {0.0f, 0.0f, 0.0f};
-    if (loc_idx == 1) coords = (Vec3){15.5f, 2.0f, -10.2f};
+static inline struct Vec3 GetTargetCoordinates(int loc_idx) {
+    struct Vec3 coords = {0.0f, 0.0f, 0.0f};
+    if (loc_idx == 1) coords = (struct Vec3){15.5f, 2.0f, -10.2f};
     else if (loc_idx == 2) coords.y = 5.0f;
-    else if (loc_idx == 3) coords = (Vec3){-50.0f, 10.0f, -50.0f};
-    else if (loc_idx == 4) coords = (Vec3){100.0f, -20.0f, 50.0f};
-    else if (loc_idx == 5) coords = (Vec3){custom_coords[0], custom_coords[1], custom_coords[2]};
+    else if (loc_idx == 3) coords = (struct Vec3){-50.0f, 10.0f, -50.0f};
+    else if (loc_idx == 4) coords = (struct Vec3){100.0f, -20.0f, 50.0f};
+    else if (loc_idx == 5) coords = custom_coords;
     return coords;
 }
 
@@ -72,15 +74,9 @@ static inline uint64_t GetBaseAddress() {
 @property (nonatomic, strong) id<MTLDevice> device;
 @property (nonatomic, strong) id<MTLCommandQueue> commandQueue;
 @property (nonatomic, assign) BOOL imguiInitialized;
-@property (nonatomic, assign) bool menuVisible;
-@property (nonatomic, assign) ImVec2 menuPos;
 @end
 
 @implementation ImGuiDrawView
-
-+ (void)showChange:(BOOL)open {
-    // not used in new system
-}
 
 - (instancetype)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil {
     self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
@@ -90,7 +86,7 @@ static inline uint64_t GetBaseAddress() {
     self.commandQueue = [self.device newCommandQueue];
     if (!self.device) abort();
 
-    // Make the MTKView pass touches through to the app
+    // Pass touches to the app
     self.view.userInteractionEnabled = NO;
 
     IMGUI_CHECKVERSION();
@@ -121,9 +117,6 @@ static inline uint64_t GetBaseAddress() {
     io.Fonts->AddFontFromFileTTF(FontPath.UTF8String, 22.f);
 
     self.imguiInitialized = YES;
-    self.menuVisible = false;
-    self.menuPos = ImVec2(100, 100); // initial menu position
-
     return self;
 }
 
@@ -147,7 +140,7 @@ static inline uint64_t GetBaseAddress() {
     ImGui_ImplMetal_NewFrame(renderPassDescriptor);
     ImGui::NewFrame();
 
-    // Floating toggle button (always visible, top-left)
+    // Floating toggle button
     ImGui::SetNextWindowPos(ImVec2(20, 20), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.6f);
     if (ImGui::Begin("ToggleButton", NULL,
@@ -158,26 +151,24 @@ static inline uint64_t GetBaseAddress() {
                      ImGuiWindowFlags_NoSavedSettings |
                      ImGuiWindowFlags_NoScrollbar)) {
 
-        if (ImGui::Button(self.menuVisible ? "CLOSE MENU" : "OPEN MENU", ImVec2(120, 40))) {
-            self.menuVisible = !self.menuVisible;
+        if (ImGui::Button(menuVisible ? "CLOSE MENU" : "OPEN MENU", ImVec2(120, 40))) {
+            menuVisible = !menuVisible;
         }
     }
     ImGui::End();
 
-    // Draw actual menu if visible
-    if (self.menuVisible) {
-        ImGui::SetNextWindowPos(self.menuPos, ImGuiCond_FirstUseEver);
+    // Main menu
+    if (menuVisible) {
+        ImGui::SetNextWindowPos(menuPos, ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(460, 610), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowBgAlpha(0.95f);
 
-        if (ImGui::Begin("M1-V1 | Companion Spawner", &self.menuVisible,
+        if (ImGui::Begin("M1-V1 | Companion Spawner", &menuVisible,
                          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse |
                          ImGuiWindowFlags_NoBringToFrontOnFocus)) {
 
-            // Allow dragging
-            self.menuPos = ImGui::GetWindowPos();
+            menuPos = ImGui::GetWindowPos();
 
-            // Category + Item selection
             ImGui::Combo("Category", &selected_category, categories, IM_ARRAYSIZE(categories));
 
             if (selected_category == 0)
@@ -191,25 +182,20 @@ static inline uint64_t GetBaseAddress() {
             else if (selected_category == 4)
                 ImGui::Combo("Item", &selected_item_idx, troll, IM_ARRAYSIZE(troll));
 
-            // Sliders
             ImGui::SliderInt("Hue", &item_hue, 0, 360);
             ImGui::SliderInt("Saturation", &item_saturation, 0, 255);
             ImGui::SliderInt("Size", &item_size, -5, 10);
 
-            // Location selection
             ImGui::Combo("Area", &selected_location, locations, IM_ARRAYSIZE(locations));
 
             if (selected_location == 5)
-                ImGui::InputFloat3("X, Y, Z", custom_coords);
+                ImGui::InputFloat3("X, Y, Z", (float*)&custom_coords);
 
-            // Spawn button
             if (ImGui::Button("SPAWN ITEM", ImVec2(-1, 52))) {
-
                 int item_id = GetRealItemID(selected_category, selected_item_idx);
-                Vec3 coords = GetTargetCoordinates(selected_location);
+                struct Vec3 coords = GetTargetCoordinates(selected_location);
 
                 uint64_t network_spawn = 0x14fA0;
-
                 void (*BypassSpawn)(float, float, float, int, int, int, int) =
                 (void (*)(float, float, float, int, int, int, int))
                 (GetBaseAddress() + network_spawn);
@@ -218,23 +204,22 @@ static inline uint64_t GetBaseAddress() {
                             item_id, item_hue, item_saturation, item_size);
             }
 
-            // Credit text at the bottom
+            // Credit text
             ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 25);
             ImGui::TextColored(ImVec4(0.8f, 0.5f, 1.0f, 1.0f), "Created by GhxstFRL");
         }
         ImGui::End();
     }
 
-    // Never capture input — pass everything to the app
+    // Never capture input
     io.WantCaptureMouse = false;
 
     ImGui::Render();
-    ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(),
-                                   commandBuffer,
-                                   renderEncoder);
+    ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(), commandBuffer, renderEncoder);
 
     [renderEncoder endEncoding];
     [commandBuffer presentDrawable:view.currentDrawable];
     [commandBuffer commit];
 }
+
 @end
