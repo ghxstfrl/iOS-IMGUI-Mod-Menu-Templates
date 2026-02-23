@@ -11,6 +11,7 @@
 #define kWidth [UIScreen mainScreen].bounds.size.width
 #define kHeight [UIScreen mainScreen].bounds.size.height
 
+// Item selection
 static int selected_category = 0;
 static int selected_item_idx = 0;
 static int selected_location = 0;
@@ -19,9 +20,9 @@ static int item_saturation = 0;
 static int item_size = 0;
 static struct Vec3 { float x, y, z; } custom_coords = {0.0f, 0.0f, 0.0f};
 
-// Static bool for ImGui window (fixes property address compile error)
+// Static bool for ImGui window
 static bool menuVisible = false;
-static ImVec2 menuPos = ImVec2(100, 100); // initial menu position
+static ImVec2 menuPos = ImVec2(100, 100);
 
 static const char* locations[] = {
     "On Player (Local)", "Inside Selling Machine", "Ship / Safety Zone",
@@ -86,7 +87,7 @@ static inline uint64_t GetBaseAddress() {
     self.commandQueue = [self.device newCommandQueue];
     if (!self.device) abort();
 
-    // Pass touches to the app
+    // Pass touches to app
     self.view.userInteractionEnabled = NO;
 
     IMGUI_CHECKVERSION();
@@ -211,7 +212,6 @@ static inline uint64_t GetBaseAddress() {
         ImGui::End();
     }
 
-    // Never capture input
     io.WantCaptureMouse = false;
 
     ImGui::Render();
