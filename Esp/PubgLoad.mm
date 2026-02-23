@@ -1,9 +1,10 @@
 //
-// PubgLoad.mm
-// pubg
+//  PubgLoad.m
+//  pubg
 //
-// Created by 李良林 on 2021/2/14.
+//  Created by 李良林 on 2021/2/14.
 //
+
 #import "PubgLoad.h"
 #import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h>
@@ -44,7 +45,8 @@ static UIWindow *GetActiveWindow(void) {
     return [UIApplication sharedApplication].windows.firstObject;
 }
 
-+ (void)load {
++ (void)load
+{
     [super load];
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -56,14 +58,16 @@ static UIWindow *GetActiveWindow(void) {
     });
 }
 
-- (void)registerAppLifecycleObservers {
+- (void)registerAppLifecycleObservers
+{
     NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
     [center addObserver:self selector:@selector(bootstrapMenuUI) name:UIApplicationDidFinishLaunchingNotification object:nil];
     [center addObserver:self selector:@selector(bootstrapMenuUI) name:UIApplicationDidBecomeActiveNotification object:nil];
     [center addObserver:self selector:@selector(bootstrapMenuUI) name:UIApplicationWillEnterForegroundNotification object:nil];
 }
 
-- (void)startWatchdog {
+- (void)startWatchdog
+{
     if (self.watchdogTimer) { return; }
 
     self.watchdogTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
@@ -72,33 +76,34 @@ static UIWindow *GetActiveWindow(void) {
         (uint64_t)(1 * NSEC_PER_SEC),
         (uint64_t)(0.2 * NSEC_PER_SEC));
 
-    __weak typeof(self) weakSelf = self;
+    __weak PubgLoad *weakSelf = self;
     dispatch_source_set_event_handler(self.watchdogTimer, ^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
+        __strong PubgLoad *strongSelf = weakSelf;
         if (!strongSelf) { return; }
         [strongSelf setupMenuButton];
     });
     dispatch_resume(self.watchdogTimer);
 }
 
-- (void)bootstrapMenuUI {
+- (void)bootstrapMenuUI
+{
     [self setupMenuButton];
     [self initTapGes];
     [self initTapGes2];
 
-    __weak typeof(self) weakSelf = self;
+    __weak PubgLoad *weakSelf2 = self;
     [[MenuAPIClient shared] validateMenuAccessWithCompletion:^(BOOL allowed, NSString * _Nullable message) {
-        __strong typeof(weakSelf) strongSelf = weakSelf;
+        __strong PubgLoad *strongSelf = weakSelf2;
         if (!strongSelf) { return; }
 
-        // Never force-disable once UI is working; keep menu reachable.
         strongSelf.apiAllowsMenu = strongSelf.apiAllowsMenu || allowed;
         [strongSelf setupMenuButton];
         (void)message;
     }];
 }
 
-- (UIButton *)buildMenuButton {
+- (UIButton *)buildMenuButton
+{
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
     button.frame = CGRectMake(16, 90, 64, 64);
     button.layer.cornerRadius = 18;
@@ -116,7 +121,9 @@ static UIWindow *GetActiveWindow(void) {
     [button.layer insertSublayer:gradientLayer atIndex:0];
 
     UIFont *menuFont = [UIFont fontWithName:@"AvenirNextCondensed-Heavy" size:24.0];
-    if (!menuFont) { menuFont = [UIFont boldSystemFontOfSize:24.0]; }
+    if (!menuFont) {
+        menuFont = [UIFont boldSystemFontOfSize:24.0];
+    }
     [button setTitle:@"M1" forState:UIControlStateNormal];
     button.titleLabel.font = menuFont;
     [button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
@@ -124,7 +131,8 @@ static UIWindow *GetActiveWindow(void) {
     return button;
 }
 
-- (void)ensureButtonInView:(UIView *)targetView {
+- (void)ensureButtonInView:(UIView *)targetView
+{
     if (!targetView) { return; }
     UIView *existing = [targetView viewWithTag:kM1ButtonTag];
     if (existing) {
@@ -137,7 +145,8 @@ static UIWindow *GetActiveWindow(void) {
     self.menuButton = button;
 }
 
-- (void)setupMenuButton {
+- (void)setupMenuButton
+{
     UIWindow *activeWindow = GetActiveWindow();
     if (!activeWindow) { return; }
 
@@ -147,7 +156,9 @@ static UIWindow *GetActiveWindow(void) {
         self.menuWindow.userInteractionEnabled = YES;
 
         if (@available(iOS 13.0, *)) {
-            if (activeWindow.windowScene) { self.menuWindow.windowScene = activeWindow.windowScene; }
+            if (activeWindow.windowScene) {
+                self.menuWindow.windowScene = activeWindow.windowScene;
+            }
         }
 
         UIViewController *hostVC = [UIViewController new];
@@ -159,22 +170,34 @@ static UIWindow *GetActiveWindow(void) {
     }
 
     [self ensureButtonInView:self.menuWindow.rootViewController.view];
-    if (activeWindow.rootViewController) { [self ensureButtonInView:activeWindow.rootViewController.view]; }
+
+    if (activeWindow.rootViewController) {
+        [self ensureButtonInView:activeWindow.rootViewController.view];
+    }
+
     [self ensureButtonInView:activeWindow];
 }
 
-- (void)toggleMenuFromButton {
+- (void)toggleMenuFromButton
+{
     self.menuVisible = !self.menuVisible;
-    if (self.menuVisible) { [self tapIconView]; } else { [self tapIconView2]; }
+    if (self.menuVisible) {
+        [self tapIconView];
+    } else {
+        [self tapIconView2];
+    }
 }
 
-- (void)initTapGes {
+-(void)initTapGes
+{
     UIViewController *currentVC = [JHPP currentViewController];
     if (!currentVC) { return; }
     for (UIGestureRecognizer *gr in currentVC.view.gestureRecognizers) {
         if ([gr isKindOfClass:[UITapGestureRecognizer class]]) {
             UITapGestureRecognizer *tapGR = (UITapGestureRecognizer *)gr;
-            if (tapGR.numberOfTapsRequired == 2 && tapGR.numberOfTouchesRequired == 3 && [tapGR.view isEqual:currentVC.view]) { return; }
+            if (tapGR.numberOfTapsRequired == 2 && tapGR.numberOfTouchesRequired == 3 && [tapGR.view isEqual:currentVC.view]) {
+                return;
+            }
         }
     }
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] init];
@@ -184,15 +207,19 @@ static UIWindow *GetActiveWindow(void) {
     [tap addTarget:self action:@selector(tapIconView)];
 }
 
-- (void)initTapGes2 {
+-(void)initTapGes2
+{
     UIViewController *currentVC = [JHPP currentViewController];
     if (!currentVC) { return; }
     for (UIGestureRecognizer *gr in currentVC.view.gestureRecognizers) {
         if ([gr isKindOfClass:[UITapGestureRecognizer class]]) {
             UITapGestureRecognizer *tapGR = (UITapGestureRecognizer *)gr;
-            if (tapGR.numberOfTapsRequired == 2 && tapGR.numberOfTouchesRequired == 2 && [tapGR.view isEqual:currentVC.view]) { return; }
+            if (tapGR.numberOfTapsRequired == 2 && tapGR.numberOfTouchesRequired == 2 && [tapGR.view isEqual:currentVC.view]) {
+                return;
+            }
         }
     }
+
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] init];
     tap.numberOfTapsRequired = 2;
     tap.numberOfTouchesRequired = 2;
@@ -200,26 +227,34 @@ static UIWindow *GetActiveWindow(void) {
     [tap addTarget:self action:@selector(tapIconView2)];
 }
 
-- (void)attachMenuViewToRootIfNeeded {
+- (void)attachMenuViewToRootIfNeeded
+{
     UIWindow *activeWindow = GetActiveWindow();
     UIViewController *rootVC = activeWindow.rootViewController;
     if (!rootVC) { return; }
 
-    if (!_vna) { _vna = [[ImGuiDrawView alloc] init]; }
+    if (!_vna) {
+        ImGuiDrawView *vc = [[ImGuiDrawView alloc] init];
+        _vna = vc;
+    }
 
-    if (_vna.view.superview != rootVC.view) { [rootVC.view addSubview:_vna.view]; }
+    if (_vna.view.superview != rootVC.view) {
+        [rootVC.view addSubview:_vna.view];
+    }
 }
 
-- (void)tapIconView2 {
+-(void)tapIconView2
+{
     self.menuVisible = NO;
     [self attachMenuViewToRootIfNeeded];
-    [ImGuiDrawView showChange:NO];
+    [ImGuiDrawView showChange:false];
 }
 
-- (void)tapIconView {
+-(void)tapIconView
+{
     self.menuVisible = YES;
     [self attachMenuViewToRootIfNeeded];
-    [ImGuiDrawView showChange:YES];
+    [ImGuiDrawView showChange:true];
 }
 
 @end
