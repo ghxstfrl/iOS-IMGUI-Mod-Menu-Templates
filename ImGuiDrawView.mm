@@ -72,14 +72,14 @@ static inline uint64_t GetBaseAddress() {
 @property (nonatomic, strong) id<MTLDevice> device;
 @property (nonatomic, strong) id<MTLCommandQueue> commandQueue;
 @property (nonatomic, assign) BOOL imguiInitialized;
+@property (nonatomic, assign) bool menuVisible;
+@property (nonatomic, assign) ImVec2 menuPos;
 @end
 
 @implementation ImGuiDrawView
 
-static bool MenDeal = true; // menu starts open
-
 + (void)showChange:(BOOL)open {
-    MenDeal = open;
+    // not used in new system
 }
 
 - (instancetype)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil {
@@ -90,13 +90,15 @@ static bool MenDeal = true; // menu starts open
     self.commandQueue = [self.device newCommandQueue];
     if (!self.device) abort();
 
+    // Make the MTKView pass touches through to the app
+    self.view.userInteractionEnabled = NO;
+
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    ImGui::StyleColorsDark(); // dark base style
+    ImGui::StyleColorsDark();
 
-    // Purple neon style
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding = 10.0f;
     style.FrameRounding = 6.0f;
@@ -104,8 +106,7 @@ static bool MenDeal = true; // menu starts open
     style.GrabRounding = 6.0f;
     style.FramePadding = ImVec2(10, 6);
     style.WindowPadding = ImVec2(12, 12);
-
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.15f, 0.0f, 0.25f, 0.95f); // dark purple
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.15f, 0.0f, 0.25f, 0.95f);
     style.Colors[ImGuiCol_Button] = ImVec4(0.6f, 0.2f, 1.0f, 0.9f);
     style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.8f, 0.4f, 1.0f, 0.95f);
     style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.9f, 0.6f, 1.0f, 1.0f);
@@ -120,6 +121,8 @@ static bool MenDeal = true; // menu starts open
     io.Fonts->AddFontFromFileTTF(FontPath.UTF8String, 22.f);
 
     self.imguiInitialized = YES;
+    self.menuVisible = false;
+    self.menuPos = ImVec2(100, 100); // initial menu position
 
     return self;
 }
@@ -127,11 +130,9 @@ static bool MenDeal = true; // menu starts open
 - (void)mtkView:(MTKView *)view drawableSizeWillChange:(CGSize)size {}
 
 - (void)drawInMTKView:(MTKView *)view {
-
     if (!self.imguiInitialized) return;
 
     ImGuiIO& io = ImGui::GetIO();
-
     io.DisplaySize = ImVec2(view.bounds.size.width, view.bounds.size.height);
     io.DisplayFramebufferScale = ImVec2(view.contentScaleFactor, view.contentScaleFactor);
     io.DeltaTime = 1.0f / float(view.preferredFramesPerSecond ?: 60);
@@ -146,14 +147,35 @@ static bool MenDeal = true; // menu starts open
     ImGui_ImplMetal_NewFrame(renderPassDescriptor);
     ImGui::NewFrame();
 
-    if (MenDeal) {
+    // Floating toggle button (always visible, top-left)
+    ImGui::SetNextWindowPos(ImVec2(20, 20), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.6f);
+    if (ImGui::Begin("ToggleButton", NULL,
+                     ImGuiWindowFlags_NoTitleBar |
+                     ImGuiWindowFlags_NoResize |
+                     ImGuiWindowFlags_AlwaysAutoResize |
+                     ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoSavedSettings |
+                     ImGuiWindowFlags_NoScrollbar)) {
 
+        if (ImGui::Button(self.menuVisible ? "CLOSE MENU" : "OPEN MENU", ImVec2(120, 40))) {
+            self.menuVisible = !self.menuVisible;
+        }
+    }
+    ImGui::End();
+
+    // Draw actual menu if visible
+    if (self.menuVisible) {
+        ImGui::SetNextWindowPos(self.menuPos, ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(460, 610), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowBgAlpha(0.95f);
 
-        // draggable window with no saved position, nice padding
-        if (ImGui::Begin("M1-V1 | Companion Spawner", &MenDeal,
-                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse)) {
+        if (ImGui::Begin("M1-V1 | Companion Spawner", &self.menuVisible,
+                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse |
+                         ImGuiWindowFlags_NoBringToFrontOnFocus)) {
+
+            // Allow dragging
+            self.menuPos = ImGui::GetWindowPos();
 
             // Category + Item selection
             ImGui::Combo("Category", &selected_category, categories, IM_ARRAYSIZE(categories));
@@ -199,15 +221,12 @@ static bool MenDeal = true; // menu starts open
             // Credit text at the bottom
             ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 25);
             ImGui::TextColored(ImVec4(0.8f, 0.5f, 1.0f, 1.0f), "Created by GhxstFRL");
-
-            // Only capture input if mouse/finger is over the menu
-            io.WantCaptureMouse = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
         }
-
         ImGui::End();
-    } else {
-        io.WantCaptureMouse = false;
     }
+
+    // Never capture input — pass everything to the app
+    io.WantCaptureMouse = false;
 
     ImGui::Render();
     ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(),
@@ -218,5 +237,4 @@ static bool MenDeal = true; // menu starts open
     [commandBuffer presentDrawable:view.currentDrawable];
     [commandBuffer commit];
 }
-
 @end
