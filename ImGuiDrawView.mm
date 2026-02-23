@@ -190,4 +190,9 @@ static bool MenDeal = true;
     [commandBuffer commit];
 }
 
+// **Fixed missing method**
++ (void)showChange:(BOOL)open {
+    MenDeal = open;
+}
+
 @end
