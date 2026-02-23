@@ -25,7 +25,6 @@ X2NIOSVN_FILES = Esp/PubgLoad.mm \
 X2NIOSVN_FRAMEWORKS = UIKit Foundation Security QuartzCore CoreGraphics CoreText Metal MetalKit
 
 # These -I flags tell the compiler exactly where to look for your .h and .hpp files!
-X2NIOSVN_CCFLAGS = -std=c++11 -fno-rtti -fno-exceptions -DNDEBUG -I. -I./Esp -I./KittyMemory
-X2NIOSVN_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-value -I. -I./Esp -I./KittyMemory
-
+X2NIOSVN_CCFLAGS = -std=c++14 -fno-rtti -fno-exceptions -DNDEBUG -I./Esp -I./KittyMemory
+X2NIOSVN_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-value -I./Esp -I./KittyMemory
 include $(THEOS_MAKE_PATH)/tweak.mk
