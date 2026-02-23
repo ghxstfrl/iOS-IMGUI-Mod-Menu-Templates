@@ -1,3 +1,4 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
 diff --git a/Esp/MenuAPIClient.h b/Esp/MenuAPIClient.h
 new file mode 100644
 index 0000000000000000000000000000000000000000..eb5ad43aa596d2f27b3f0beb6d840e377fc13a4b
@@ -16,3 +17,6 @@ index 0000000000000000000000000000000000000000..eb5ad43aa596d2f27b3f0beb6d840e37
 +@end
 +
 +NS_ASSUME_NONNULL_END
+ 
+EOF
+)
