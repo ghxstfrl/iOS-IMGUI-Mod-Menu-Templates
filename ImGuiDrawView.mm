@@ -1,4 +1,3 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
 diff --git a/ImGuiDrawView.mm b/ImGuiDrawView.mm
 index b0e3fb3611c62b518e44a137c544fe72a7362a24..ef5f4f0a5f3f2ee1830e87088d3738b40af154b0 100644
 --- a/ImGuiDrawView.mm
@@ -292,6 +291,3 @@ index b0e3fb3611c62b518e44a137c544fe72a7362a24..ef5f4f0a5f3f2ee1830e87088d3738b4
  - (void)mtkView:(MTKView*)view drawableSizeWillChange:(CGSize)size { }
  
  @end
- 
-EOF
-)
