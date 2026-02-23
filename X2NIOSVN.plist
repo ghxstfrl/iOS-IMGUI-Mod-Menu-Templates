@@ -1,24 +1,19 @@
-diff --git a/X2NIOSVN.plist b/X2NIOSVN.plist
-index 5dc896c524204ef9888f0035fd56099b291d9a68..794ea57cd4613e46f5157d05ba96d8bb213a60d1 100644
---- a/X2NIOSVN.plist
-+++ b/X2NIOSVN.plist
-@@ -1,13 +1,19 @@
- <?xml version="1.0" encoding="UTF-8"?>
- <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
- <plist version="1.0">
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+ <key>Filter</key>
  <dict>
- 	<key>Filter</key>
- 	<dict>
- 		<key>Bundles</key>
- 		<array>
- 			<string>com.woostergames.animalcompany</string>
-+			<string>com.woostergames.animalcompanycompanion</string>
-+			<string>com.woostergames.animalcompany.companion</string>
-+			<string>com.woostergames.animalcompanycompanionapp</string>
-+			<string>com.woostergames.animalcompanycompanionios</string>
-+			<string>com.woostergames.companion</string>
-+			<string>com.woostergames.accompanion</string>
- 		</array>
- 	</dict>
+ <key>Bundles</key>
+ <array>
+ <string>com.woostergames.animalcompany</string>
+ <string>com.woostergames.animalcompanycompanion</string>
+ <string>com.woostergames.animalcompany.companion</string>
+ <string>com.woostergames.animalcompanycompanionapp</string>
+ <string>com.woostergames.animalcompanycompanionios</string>
+ <string>com.woostergames.companion</string>
+ <string>com.woostergames.accompanion</string>
+ </array>
  </dict>
- </plist>
+</dict>
+</plist>
