@@ -30,25 +30,51 @@ static void logAppend(NSString *msg) {
 static NSTimer *g_godModeTimer = nil;
 static BOOL g_godModeEnabled = NO;
 
-// REMOVED `extern "C"` SO IT READS PubgLoad.mm's C++ FUNCTIONS PROPERLY!
+// ==========================================
+// ENGINE STUBS - NO MORE LINKER ERRORS!
+// These act as placeholders so the menu successfully compiles.
+// You will put your actual KittyMemory read/write logic inside these later!
+// ==========================================
 typedef struct { float x; float y; float z; } Vec3;
-extern void spawnItem(NSString* name, int qty);
-extern void spawnMonster(NSString* name, int qty);
-extern void spawnItemAtPos(NSString* name, Vec3 pos);
-extern Vec3 getPlayerPosition();
 
-extern void* g_gameImage;
-extern void* g_findObjectsOfType;
-extern void* g_rpcTeleport;
-extern void* g_getTransformMethod;
-extern void* g_getLocalPlayer;
-extern void (*g_setPositionInjected)(void* transform, Vec3* pos);
-extern void (*g_getPositionInjected)(void* transform, Vec3* pos);
-extern void* resolveClass(const char* name);
-extern void* findObjectOfType(void* klass);
+void* g_gameImage = NULL;
+void* g_findObjectsOfType = NULL;
+void* g_rpcTeleport = NULL;
+void* g_getTransformMethod = NULL;
+void* g_getLocalPlayer = NULL;
+void (*g_setPositionInjected)(void* transform, Vec3* pos) = NULL;
+void (*g_getPositionInjected)(void* transform, Vec3* pos) = NULL;
 
+Vec3 getPlayerPosition() {
+    // TODO: Put your memory read for player coordinates here
+    return (Vec3){0, 0, 0}; 
+}
+
+void spawnItem(NSString* name, int qty) {
+    NSLog(@"[M1 Mod] Pretending to spawn item: %@ x%d", name, qty);
+}
+
+void spawnItemAtPos(NSString* name, Vec3 pos) {
+    NSLog(@"[M1 Mod] Pretending to spawn item: %@ at X:%.1f Y:%.1f Z:%.1f", name, pos.x, pos.y, pos.z);
+}
+
+void spawnMonster(NSString* name, int qty) {
+    NSLog(@"[M1 Mod] Pretending to spawn mob: %@ x%d", name, qty);
+}
+
+void* resolveClass(const char* name) {
+    return NULL; 
+}
+
+void* findObjectOfType(void* klass) {
+    return NULL; 
+}
+
+
+// ==========================================
+// INTERFACE
+// ==========================================
 @interface ImGuiDrawView ()
-// Declare the hack methods
 - (void)spawnBombTapped;
 - (void)nukeZoneTapped;
 - (void)teleportAllToMoonTapped;
