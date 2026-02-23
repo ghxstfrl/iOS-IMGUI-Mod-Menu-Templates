@@ -9,7 +9,7 @@
 
 // KittyMemory for your Hacks
 #include "KittyMemory/MemoryPatch.hpp"
-#include "writeData.hpp"
+#include "KittyMemory/writeData.hpp"
 
 @implementation ImGuiDrawView
 
@@ -19,11 +19,14 @@
     dispatch_once(&onceToken, ^{
         UIWindow *mainWindow = [UIApplication sharedApplication].keyWindow;
         if (!mainWindow) {
-            for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
-                if ([scene isKindOfClass:[UIWindowScene class]]) {
-                    UIWindowScene *windowScene = (UIWindowScene *)scene;
-                    for (UIWindow *w in windowScene.windows) {
-                        if (w.isKeyWindow) { mainWindow = w; break; }
+            // FIX 1: Safely check for iOS 13+ to avoid compiler errors on older targets
+            if (@available(iOS 13.0, *)) {
+                for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+                    if ([scene isKindOfClass:[UIWindowScene class]]) {
+                        UIWindowScene *windowScene = (UIWindowScene *)scene;
+                        for (UIWindow *w in windowScene.windows) {
+                            if (w.isKeyWindow) { mainWindow = w; break; }
+                        }
                     }
                 }
             }
@@ -87,42 +90,29 @@
     
     ImVec4* colors = style.Colors;
     
-    // Core Backgrounds (Dark Deep Purple/Black)
     colors[ImGuiCol_WindowBg]         = ImVec4(0.06f, 0.03f, 0.09f, 0.95f);
     colors[ImGuiCol_ChildBg]          = ImVec4(0.08f, 0.04f, 0.12f, 0.60f);
-    
-    // Neon Purple Borders
     colors[ImGuiCol_Border]           = ImVec4(0.60f, 0.10f, 1.00f, 0.60f);
-    
-    // Headers & Titles (Neon Blue to Purple transitions)
     colors[ImGuiCol_TitleBg]          = ImVec4(0.12f, 0.06f, 0.20f, 1.00f);
     colors[ImGuiCol_TitleBgActive]    = ImVec4(0.40f, 0.10f, 0.80f, 1.00f);
-    
-    // Buttons (Blue & Purple vibes)
     colors[ImGuiCol_Button]           = ImVec4(0.30f, 0.10f, 0.60f, 1.00f);
     colors[ImGuiCol_ButtonHovered]    = ImVec4(0.40f, 0.15f, 0.80f, 1.00f);
-    colors[ImGuiCol_ButtonActive]     = ImVec4(0.00f, 0.60f, 1.00f, 1.00f); // Bright Blue when clicked
-    
-    // Checkboxes / Sliders
+    colors[ImGuiCol_ButtonActive]     = ImVec4(0.00f, 0.60f, 1.00f, 1.00f); 
     colors[ImGuiCol_FrameBg]          = ImVec4(0.15f, 0.08f, 0.25f, 1.00f);
     colors[ImGuiCol_FrameBgHovered]   = ImVec4(0.25f, 0.12f, 0.40f, 1.00f);
     colors[ImGuiCol_FrameBgActive]    = ImVec4(0.35f, 0.18f, 0.55f, 1.00f);
-    colors[ImGuiCol_CheckMark]        = ImVec4(0.00f, 0.80f, 1.00f, 1.00f); // Neon Blue
+    colors[ImGuiCol_CheckMark]        = ImVec4(0.00f, 0.80f, 1.00f, 1.00f);
     colors[ImGuiCol_SliderGrab]       = ImVec4(0.60f, 0.10f, 1.00f, 1.00f);
     colors[ImGuiCol_SliderGrabActive] = ImVec4(0.00f, 0.80f, 1.00f, 1.00f);
-    
-    // Tabs
     colors[ImGuiCol_Tab]              = ImVec4(0.20f, 0.08f, 0.40f, 1.00f);
     colors[ImGuiCol_TabHovered]       = ImVec4(0.40f, 0.15f, 0.80f, 1.00f);
     colors[ImGuiCol_TabActive]        = ImVec4(0.50f, 0.20f, 0.95f, 1.00f);
-    
-    // Text
     colors[ImGuiCol_Text]             = ImVec4(0.95f, 0.95f, 0.98f, 1.00f);
     colors[ImGuiCol_TextDisabled]     = ImVec4(0.50f, 0.50f, 0.60f, 1.00f);
 }
 
 // ==========================================
-// TOUCH HANDLING (Passes touches to game when not touching menu)
+// TOUCH HANDLING
 // ==========================================
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
     UIView *hitView = [super hitTest:point withEvent:event];
@@ -163,8 +153,14 @@
 - (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event { [self updateIOWithTouchEvent:event]; }
 
 // ==========================================
-// RENDERING LOOP
+// RENDERING LOOP & METAL DELEGATE
 // ==========================================
+
+// FIX 2: Added missing rotation method required by Apple's protocol
+- (void)mtkView:(MTKView *)view drawableSizeWillChange:(CGSize)size {
+    // Left empty safely
+}
+
 - (void)drawInMTKView:(MTKView *)view {
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize.x = view.bounds.size.width;
@@ -215,20 +211,15 @@
         ImVec2 center = ImVec2(pos.x + 35, pos.y + 35);
         float radius = 30.0f;
         
-        // Background Base (Dark Blue/Purple mix)
         drawList->AddCircleFilled(center, radius, IM_COL32(30, 20, 60, 240));
-        
-        // Glowing Neon Borders
         drawList->AddCircle(center, radius, IM_COL32(180, 40, 255, 255), 0, 4.0f); // Outer Purple
         drawList->AddCircle(center, radius - 3.0f, IM_COL32(0, 195, 255, 200), 0, 2.0f); // Inner Cyan Blue
         
-        // Text "M1" Centered
         ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
         ImGui::SetCursorPos(ImVec2(18, 22));
         ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "M1");
         ImGui::PopFont();
         
-        // Handle click (if not dragging)
         if (ImGui::IsWindowHovered() && ImGui::IsMouseReleased(0) && !ImGui::IsMouseDragging(0)) {
             self.isMenuVisible = YES;
         }
@@ -236,7 +227,7 @@
         ImGui::End();
         ImGui::PopStyleVar();
         ImGui::PopStyleColor();
-        return; // Don't draw the rest of the menu when closed
+        return; 
     }
     
     // ---------------------------------------------------
@@ -244,14 +235,13 @@
     // ---------------------------------------------------
     ImGui::SetNextWindowSize(ImVec2(550, 480), ImGuiCond_FirstUseEver);
     
-    // Push cyan text for the title bar only
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.8f, 1.0f, 1.0f)); 
     bool windowOpen = true;
     ImGui::Begin("M1 V1", &windowOpen, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
     ImGui::PopStyleColor();
     
     if (!windowOpen) {
-        self.isMenuVisible = NO; // Hide if X is clicked
+        self.isMenuVisible = NO; 
     }
 
     if (ImGui::BeginTabBar("MenuTabs", ImGuiTabBarFlags_None)) {
@@ -301,7 +291,6 @@
             ImGui::Separator();
             ImGui::Spacing();
             
-            // Memory Patch Toggles Example
             static bool aimbot = false;
             if (ImGui::Checkbox("Aimbot / Magic Bullet", &aimbot)) {
                 if (aimbot) {
@@ -325,7 +314,6 @@
             
             ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
             
-            // Quick Action Buttons
             if (ImGui::Button("Spawn Bomb (50 Random Items)", ImVec2(-1, 40))) {
                 // Trigger bomb
             }
@@ -336,7 +324,6 @@
             
             ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
             
-            // Dangerous Buttons (Red color override)
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.1f, 0.2f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.3f, 1.0f));
             if (ImGui::Button("NUKE SERVER", ImVec2(-1, 45))) {
