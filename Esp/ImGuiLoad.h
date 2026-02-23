@@ -1,21 +1,17 @@
 //
-//  ImGuiLoad.h
+//  ImGuiDrawView.h
 //  ImGuiTest
 //
 //  Created by yiming on 2021/6/2.
 //
 
-#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface ImGuiLoad : NSObject
+@interface ImGuiDrawView : UIViewController
 
-+ (instancetype)share;
-
-///
-- (void)show;
-- (void)hide;
++ (void)showChange:(BOOL)open;
 
 @end
 
