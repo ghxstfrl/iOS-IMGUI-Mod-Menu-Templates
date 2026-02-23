@@ -1,51 +1,42 @@
 #import "ImGuiDrawView.h"
 #import <Metal/Metal.h>
 #import <MetalKit/MetalKit.h>
+#include <dlfcn.h>
 #include <string>
 #include <vector>
 #include <algorithm>
-#include <dlfcn.h>
+#include <cmath>
 
 // ImGui Framework
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_impl_metal.h"
 
-// KittyMemory for memory patches
+// KittyMemory (Standard includes)
 #include "KittyMemory/MemoryPatch.hpp"
 #include "KittyMemory/writeData.hpp"
 
-// ==========================================
-// GAME DEFINITIONS & GLOBALS
-// ==========================================
-#ifndef MAP_MIN_X
-#define MAP_MIN_X -1000.0f
-#define MAP_MAX_X 1000.0f
-#define MAP_MIN_Z -1000.0f
-#define MAP_MAX_Z 1000.0f
-#endif
+// ==========================================================
+//  DYNAMIC IL2CPP ENGINE (No Missing Files Required!)
+// ==========================================================
 
-// THESE ARE THE GLOBALS YOUR HACK ENGINE READS!
+// 1. Structures needed by Unity
+typedef struct { float x; float y; float z; } Vec3;
+typedef struct { float x; float y; float z; float w; } Quat;
+
+// 2. Global Toggles (Connected to UI)
 BOOL g_colorEnabled = NO;
-int g_colorHue = 0;         // 0 to 360
-int g_colorSaturation = 255; // 0 to 255
+int g_colorHue = 0;          // 0 - 360
+int g_colorSaturation = 255; // 0 - 255
 BOOL g_randomizeColor = NO;
 
 BOOL g_scaleEnabled = NO;
-int g_scaleModifier = 0;    // -127 to 127
+int g_scaleModifier = 0;     // -127 to 127
 
 static NSTimer *g_godModeTimer = nil;
 static BOOL g_godModeEnabled = NO;
 
-// ==========================================
-// THE GOLDEN BULLET: WEAK STUBS
-// These prevent Linker Errors permanently. If your real code is missing, 
-// these run safely. If your real code exists, it overrides these automatically!
-// ==========================================
-typedef struct { float x; float y; float z; } Vec3;
-
-typedef struct { float x; float y; float z; float w; } Quat;
-
+// 3. Dynamic IL2CPP Type Definitions
 typedef void* (*il2cpp_domain_get_t)();
 typedef void** (*il2cpp_domain_get_assemblies_t)(void* domain, size_t* size);
 typedef void* (*il2cpp_assembly_get_image_t)(void* assembly);
@@ -54,91 +45,103 @@ typedef void* (*il2cpp_class_get_method_from_name_t)(void* klass, const char* na
 typedef void* (*il2cpp_runtime_invoke_t)(void* method, void* obj, void** params, void** exc);
 typedef void* (*il2cpp_string_new_t)(const char* str);
 
-static void* get_il2cpp_method(const char* className, const char* methodName, int argsCount) {
-    il2cpp_domain_get_t domain_get = (il2cpp_domain_get_t)dlsym(RTLD_DEFAULT, "il2cpp_domain_get");
-    il2cpp_domain_get_assemblies_t get_assemblies = (il2cpp_domain_get_assemblies_t)dlsym(RTLD_DEFAULT, "il2cpp_domain_get_assemblies");
-    il2cpp_assembly_get_image_t get_image = (il2cpp_assembly_get_image_t)dlsym(RTLD_DEFAULT, "il2cpp_assembly_get_image");
-    il2cpp_class_from_name_t class_from_name = (il2cpp_class_from_name_t)dlsym(RTLD_DEFAULT, "il2cpp_class_from_name");
-    il2cpp_class_get_method_from_name_t get_method = (il2cpp_class_get_method_from_name_t)dlsym(RTLD_DEFAULT, "il2cpp_class_get_method_from_name");
+// 4. Helper to find Game Functions automatically
+void* get_method(const char* className, const char* methodName, int args) {
+    static il2cpp_domain_get_t domain_get = (il2cpp_domain_get_t)dlsym(RTLD_DEFAULT, "il2cpp_domain_get");
+    static il2cpp_domain_get_assemblies_t get_assemblies = (il2cpp_domain_get_assemblies_t)dlsym(RTLD_DEFAULT, "il2cpp_domain_get_assemblies");
+    static il2cpp_assembly_get_image_t get_image = (il2cpp_assembly_get_image_t)dlsym(RTLD_DEFAULT, "il2cpp_assembly_get_image");
+    static il2cpp_class_from_name_t class_from_name = (il2cpp_class_from_name_t)dlsym(RTLD_DEFAULT, "il2cpp_class_from_name");
+    static il2cpp_class_get_method_from_name_t get_method_func = (il2cpp_class_get_method_from_name_t)dlsym(RTLD_DEFAULT, "il2cpp_class_get_method_from_name");
 
-    if (!domain_get || !get_assemblies || !get_image || !class_from_name || !get_method) return NULL;
+    if (!domain_get) return NULL;
 
     void* domain = domain_get();
-    size_t size = 0;
+    size_t size;
     void** assemblies = get_assemblies(domain, &size);
-    if (!assemblies) return NULL;
 
     for (size_t i = 0; i < size; ++i) {
         void* image = get_image(assemblies[i]);
-        if (!image) continue;
-
+        // Try global namespace first, then AnimalCompany namespace
         void* klass = class_from_name(image, "", className);
         if (!klass) klass = class_from_name(image, "AnimalCompany", className);
-
+        
         if (klass) {
-            void* method = get_method(klass, methodName, argsCount);
+            void* method = get_method_func(klass, methodName, args);
             if (method) return method;
         }
     }
-
     return NULL;
 }
 
-extern "C" {
-    __attribute__((weak)) Vec3 getPlayerPosition() { return (Vec3){0, 1.0f, 0}; }
-    __attribute__((weak)) void spawnItem(NSString* name, int qty) { NSLog(@"[M1] Weak Spawn: %@ x%d", name, qty); }
-    __attribute__((weak)) void spawnItemAtPos(NSString* name, Vec3 pos) { NSLog(@"[M1] Weak Spawn At Pos: %@", name); }
-
-    void spawnItemAtPos(NSString* name, Vec3 pos) {
-        il2cpp_string_new_t string_new = (il2cpp_string_new_t)dlsym(RTLD_DEFAULT, "il2cpp_string_new");
-        il2cpp_runtime_invoke_t runtime_invoke = (il2cpp_runtime_invoke_t)dlsym(RTLD_DEFAULT, "il2cpp_runtime_invoke");
-        if (!string_new || !runtime_invoke) {
-            NSLog(@"[M1 Mod] ERROR: Could not load il2cpp API!");
-            return;
-        }
-
-        void* nameStr = string_new([name UTF8String]);
-        Quat rot = {0, 0, 0, 1};
-
-        void* spawnMethod = get_il2cpp_method("PrefabGenerator", "RPC_GeneratePrefab", 4);
-        if (!spawnMethod) spawnMethod = get_il2cpp_method("PrefabGenerator", "GeneratePrefab", 4);
-        if (!spawnMethod) spawnMethod = get_il2cpp_method("ItemSpawner", "SpawnItem", 4);
-
-        if (spawnMethod) {
-            void* exception = NULL;
-            void* params[] = { nameStr, &pos, &rot, NULL };
-            runtime_invoke(spawnMethod, NULL, params, &exception);
-
-            if (!exception) {
-                NSLog(@"[M1 Mod] SUCCESS! Spawned %@ at %.1f, %.1f, %.1f", name, pos.x, pos.y, pos.z);
-                return;
-            }
-
-            NSLog(@"[M1 Mod] Spawn method fired, but game threw an exception.");
-            return;
-        }
-
-        NSLog(@"[M1 Mod] FAILED: Could not find PrefabGenerator.RPC_GeneratePrefab in game memory.");
-    }
-
-    void spawnItem(NSString* name, int qty) {
-        Vec3 pos = getPlayerPosition();
-        for (int i = 0; i < qty; i++) {
-            Vec3 spreadPos = pos;
-            spreadPos.x += ((float)arc4random_uniform(200) / 100.0f) - 1.0f;
-            spreadPos.z += ((float)arc4random_uniform(200) / 100.0f) - 1.0f;
-            spreadPos.y += 1.0f;
-            spawnItemAtPos(name, spreadPos);
-        }
-    }
-
-    __attribute__((weak)) void spawnMonster(NSString* name, int qty) { NSLog(@"[M1] Weak Spawn Mob: %@", name); }
-    __attribute__((weak)) void* resolveClass(const char* name) { return NULL; }
-    __attribute__((weak)) void* findObjectOfType(void* klass) { return NULL; }
+// 5. Helper to Log to Console
+void logAppend(NSString *msg) {
+    NSLog(@"[M1 Mod] %@", msg);
 }
 
-static void logAppend(NSString *msg) {
-    NSLog(@"[M1 Mod] %@", msg);
+// ==========================================================
+//  GAME LOGIC (The "Engine" Implementation)
+// ==========================================================
+
+Vec3 getPlayerPosition() {
+    // Attempt to find local player dynamically
+    // If unavailable, return default to prevent crash
+    static il2cpp_runtime_invoke_t invoke = (il2cpp_runtime_invoke_t)dlsym(RTLD_DEFAULT, "il2cpp_runtime_invoke");
+    
+    // Logic: PlayerController -> localPlayer -> transform -> position
+    // For safety in this snippet, we return a safe default.
+    // If you have the offsets, replace this!
+    return (Vec3){0, 2.0f, 0}; 
+}
+
+void spawnItemAtPos(NSString* name, Vec3 pos) {
+    static il2cpp_string_new_t string_new = (il2cpp_string_new_t)dlsym(RTLD_DEFAULT, "il2cpp_string_new");
+    static il2cpp_runtime_invoke_t invoke = (il2cpp_runtime_invoke_t)dlsym(RTLD_DEFAULT, "il2cpp_runtime_invoke");
+
+    if (!string_new || !invoke) return;
+
+    void* nameStr = string_new([name UTF8String]);
+    Quat rot = {0, 0, 0, 1};
+    void* exc = NULL;
+
+    // 1. Try to Spawn
+    void* spawnMethod = get_method("PrefabGenerator", "RPC_GeneratePrefab", 4);
+    if (!spawnMethod) spawnMethod = get_method("PrefabGenerator", "GeneratePrefab", 4);
+    if (!spawnMethod) spawnMethod = get_method("ItemSpawner", "SpawnItem", 4);
+
+    if (spawnMethod) {
+        void* params[] = { nameStr, &pos, &rot, NULL }; // NULL for 4th arg (usually Player)
+        invoke(spawnMethod, NULL, params, &exc);
+        
+        if (exc) {
+            logAppend(@"[Fail] Spawn method threw exception.");
+        } else {
+            logAppend([NSString stringWithFormat:@"[Success] Spawning %@", name]);
+        }
+    } else {
+        logAppend(@"[Fail] Could not find Spawn Function in memory.");
+    }
+}
+
+void spawnItem(NSString* name, int qty) {
+    Vec3 pos = getPlayerPosition();
+    for(int i=0; i<qty; i++) {
+        // Spread items out slightly
+        Vec3 spawnPos = pos;
+        spawnPos.x += ((float)(rand() % 100) / 50.0f) - 1.0f;
+        spawnPos.z += ((float)(rand() % 100) / 50.0f) - 1.0f;
+        spawnPos.y += 1.0f;
+        
+        spawnItemAtPos(name, spawnPos);
+        
+        // Note: Applying Color/Scale requires finding the returned object
+        // and calling RPC_SetColor or SetScale on it. 
+        // This basic version focuses on spawning the object first.
+    }
+}
+
+void spawnMonster(NSString* name, int qty) {
+    // Just a wrapper for now, assuming monster names work in the same spawner
+    spawnItem(name, qty);
 }
 
 // ==========================================
@@ -186,7 +189,7 @@ const int g_allMobsCount = sizeof(g_allMobs) / sizeof(g_allMobs[0]);
 
 
 // ==========================================
-// VIEW CONTROLLER
+// INTERFACE
 // ==========================================
 @interface ImGuiDrawView ()
 - (void)spawnBombTapped;
@@ -469,7 +472,7 @@ const int g_allMobsCount = sizeof(g_allMobs) / sizeof(g_allMobs[0]);
                 }
                 
                 NSString *itemName = [NSString stringWithUTF8String:g_allItems[item_current_idx]];
-                spawnItem(itemName, spawnQty); // Triggers real hook or weak stub seamlessly
+                spawnItem(itemName, spawnQty); 
                 logAppend([NSString stringWithFormat:@"Spawned %@ x%d", itemName, spawnQty]);
             }
             ImGui::EndTabItem();
@@ -568,46 +571,36 @@ const int g_allMobsCount = sizeof(g_allMobs) / sizeof(g_allMobs[0]);
 }
 
 // ============================================================
-// HACK ENGINE: Orbit source code integrations
+// HACK ENGINE: Integrated Logic (Self-Contained)
 // ============================================================
 
 - (void)spawnBombTapped {
-    Vec3 playerPos = getPlayerPosition();
     logAppend(@"Spawn Bomb: 50 random items!");
     for (int i = 0; i < 50; i++) {
         NSString *name = [NSString stringWithUTF8String:g_allItems[arc4random_uniform(g_allItemsCount)]];
-        float rx = ((float)arc4random_uniform(2000) / 100.0f) - 10.0f;
-        float ry = ((float)arc4random_uniform(1000) / 100.0f);
-        float rz = ((float)arc4random_uniform(2000) / 100.0f) - 10.0f;
-        Vec3 pos = { playerPos.x + rx, playerPos.y + ry, playerPos.z + rz };
-        spawnItemAtPos(name, pos);
+        spawnItem(name, 1);
     }
 }
 
 - (void)godKitTapped {
-    Vec3 pp = getPlayerPosition();
     logAppend(@"God Kit: spawning OP loadout!");
     NSArray *godItems = @[
         @"item_jetpack", @"item_rpg", @"item_grenade_launcher", @"item_flamethrower_skull_ruby",
         @"item_stellarsword_gold", @"item_backpack_mega", @"item_revolver_gold"
     ];
-    for (NSInteger i = 0; i < (NSInteger)godItems.count; i++) {
-        float rx = ((float)arc4random_uniform(600) / 100.0f) - 3.0f;
-        float rz = ((float)arc4random_uniform(600) / 100.0f) - 3.0f;
-        Vec3 pos = { pp.x + rx, pp.y + 1.0f, pp.z + rz };
-        spawnItemAtPos(godItems[i], pos);
+    for (NSString* item in godItems) {
+        spawnItem(item, 1);
     }
 }
 
 - (void)teleportAllToMoonTapped {
     logAppend(@"\U0001F319 Teleporting all to the MOON!");
-    void *netPlayerClass = resolveClass("NetPlayer");
+    void *netPlayerClass = get_method("NetPlayer", "get_transform", 0); // Check if class exists
     if (!netPlayerClass) return;
     logAppend(@"Triggered Teleport To Moon Logic.");
 }
 
 - (void)nukeZoneTapped {
-    Vec3 pp = getPlayerPosition();
     logAppend(@"☢ MEGA NUKE INCOMING — TOTAL ANNIHILATION ☢");
 
     NSArray *explosives = @[
@@ -616,14 +609,8 @@ const int g_allMobsCount = sizeof(g_allMobs) / sizeof(g_allMobs[0]);
     ];
 
     for (int i = 0; i < 100; i++) {
-        float rx = ((float)arc4random_uniform(4000) / 100.0f) - 20.0f;
-        float rz = ((float)arc4random_uniform(4000) / 100.0f) - 20.0f;
-        float ry = 8.0f + ((float)arc4random_uniform(1500) / 100.0f);
-        Vec3 pos = { pp.x + rx, pp.y + ry, pp.z + rz };
         NSString *item = explosives[arc4random_uniform((uint32_t)explosives.count)];
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(i * 0.03 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            spawnItemAtPos(item, pos);
-        });
+        spawnItem(item, 1);
     }
 }
 
@@ -633,12 +620,11 @@ const int g_allMobsCount = sizeof(g_allMobs) / sizeof(g_allMobs[0]);
     
     g_godModeTimer = [NSTimer scheduledTimerWithTimeInterval:0.5 repeats:YES block:^(NSTimer *t) {
         if (!g_godModeEnabled) { [t invalidate]; g_godModeTimer = nil; return; }
+        
+        // This timer keeps health maxed out (Logic stub)
         const char *classNames[] = { "PlayerHealth", "Health", "CharacterHealth" };
         for (int c = 0; c < 3; c++) {
-            void *cls = resolveClass(classNames[c]);
-            if (!cls) continue;
-            void *healthObj = findObjectOfType(cls);
-            if (!healthObj) continue;
+            // Logic would go here to find object and set health
         }
     }];
 }
