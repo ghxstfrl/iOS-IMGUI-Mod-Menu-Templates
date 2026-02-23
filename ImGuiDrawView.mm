@@ -10,7 +10,6 @@
 
 #define kWidth [UIScreen mainScreen].bounds.size.width
 #define kHeight [UIScreen mainScreen].bounds.size.height
-#define kScale [UIScreen mainScreen].scale
 
 static int selected_category = 0;
 static int selected_item_idx = 0;
@@ -72,11 +71,12 @@ static inline uint64_t GetBaseAddress() {
 @interface ImGuiDrawView () <MTKViewDelegate>
 @property (nonatomic, strong) id<MTLDevice> device;
 @property (nonatomic, strong) id<MTLCommandQueue> commandQueue;
+@property (nonatomic, assign) BOOL imguiInitialized;
 @end
 
 @implementation ImGuiDrawView
 
-static bool MenDeal = false;
+static bool MenDeal = true; // start open to verify it works
 
 + (void)showChange:(BOOL)open {
     MenDeal = open;
@@ -86,18 +86,22 @@ static bool MenDeal = false;
     self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
     if (!self) return nil;
 
-    _device = MTLCreateSystemDefaultDevice();
-    _commandQueue = [_device newCommandQueue];
-    if (!_device) abort();
+    self.device = MTLCreateSystemDefaultDevice();
+    self.commandQueue = [self.device newCommandQueue];
+    if (!self.device) abort();
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     ImGui::StyleColorsClassic();
 
+    ImGui_ImplMetal_Init(self.device);
+
     NSString *FontPath = @"/System/Library/Fonts/AppFonts/Charter.ttc";
-    io.Fonts->AddFontFromFileTTF(FontPath.UTF8String, 40.f, NULL,
-                                io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+    io.Fonts->AddFontFromFileTTF(FontPath.UTF8String, 35.f);
+
+    self.imguiInitialized = YES;
 
     return self;
 }
@@ -106,13 +110,12 @@ static bool MenDeal = false;
 
 - (void)drawInMTKView:(MTKView *)view {
 
+    if (!self.imguiInitialized) return;
+
     ImGuiIO& io = ImGui::GetIO();
 
-    CGFloat framebufferScale = view.window.screen ?
-        view.window.screen.scale : UIScreen.mainScreen.scale;
-
     io.DisplaySize = ImVec2(view.bounds.size.width, view.bounds.size.height);
-    io.DisplayFramebufferScale = ImVec2(framebufferScale, framebufferScale);
+    io.DisplayFramebufferScale = ImVec2(view.contentScaleFactor, view.contentScaleFactor);
     io.DeltaTime = 1.0f / float(view.preferredFramesPerSecond ?: 60);
 
     id<MTLCommandBuffer> commandBuffer = [self.commandQueue commandBuffer];
@@ -122,8 +125,7 @@ static bool MenDeal = false;
     id<MTLRenderCommandEncoder> renderEncoder =
         [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
 
-    // 🔥 THIS WAS MISSING — REQUIRED FOR INPUT TO WORK
-    ImGui_ImplMetal_NewFrame(view);
+    ImGui_ImplMetal_NewFrame(renderPassDescriptor);
     ImGui::NewFrame();
 
     if (MenDeal) {
