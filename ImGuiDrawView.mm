@@ -96,6 +96,9 @@ static void SetupM1V1Theme() {
     
      NSString *FontPath = @"/System/Library/Fonts/AppFonts/Charter.ttc";
      io.Fonts->AddFontFromFileTTF(FontPath.UTF8String, 40.f,NULL,io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+     - (void)drawInMTKView:(MTKView*)view
+{
+    CGFloat framebufferScale = view.window.screen.scale ?: UIScreen.mainScreen.scale;
      CGFloat framebufferScale = view.window.screen.scale ?: UIScreen.mainScreen.scale;
      io.DisplayFramebufferScale = ImVec2(framebufferScale, framebufferScale);
      io.DeltaTime = 1 / float(view.preferredFramesPerSecond ?: 60);
