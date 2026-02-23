@@ -79,7 +79,7 @@ static inline uint64_t GetBaseAddress() {
 
 @implementation ImGuiDrawView
 
-// Restore old interface so other files still compile
+// Class method to maintain PubgLoad.mm compatibility
 + (void)showChange:(BOOL)open {
     menuVisible = open;
 }
@@ -92,7 +92,7 @@ static inline uint64_t GetBaseAddress() {
     self.commandQueue = [self.device newCommandQueue];
     if (!self.device) abort();
 
-    // Pass touches to app
+    // Pass touches through so app remains interactive
     self.view.userInteractionEnabled = NO;
 
     IMGUI_CHECKVERSION();
