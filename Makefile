@@ -8,10 +8,8 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = X2NIOSVN
 
-# Added your game hook files back to the compilation list!
+# Removed JHPP and MenuAPIClient so it stops asking for the old UI
 X2NIOSVN_FILES = Esp/PubgLoad.mm \
-                 Esp/MenuAPIClient.m \
-                 Esp/JHPP.m \
                  ImGuiDrawView.mm \
                  KittyMemory/KittyMemory.cpp \
                  KittyMemory/MemoryPatch.cpp \
