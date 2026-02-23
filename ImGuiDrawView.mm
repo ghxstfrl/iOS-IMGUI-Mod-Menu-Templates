@@ -77,11 +77,9 @@ static inline uint64_t GetBaseAddress() {
 @implementation ImGuiDrawView
 
 static bool MenDeal = false;
-static bool showMenu = false; // keeps track for showChange
 
 + (void)showChange:(BOOL)open {
-    showMenu = open;
-    // If you want, you can add code here to hide/show your view
+    MenDeal = open;
 }
 
 - (instancetype)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil {
@@ -99,17 +97,21 @@ static bool showMenu = false; // keeps track for showChange
 
     NSString *FontPath = @"/System/Library/Fonts/AppFonts/Charter.ttc";
     io.Fonts->AddFontFromFileTTF(FontPath.UTF8String, 40.f, NULL,
-                                  io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+                                io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+
     return self;
 }
 
-- (void)mtkView:(MTKView *)view drawableSizeWillChange:(CGSize)size {
-    // required MTKViewDelegate method
-}
+- (void)mtkView:(MTKView *)view drawableSizeWillChange:(CGSize)size {}
 
 - (void)drawInMTKView:(MTKView *)view {
+
     ImGuiIO& io = ImGui::GetIO();
-    CGFloat framebufferScale = view.window.screen ? view.window.screen.scale : UIScreen.mainScreen.scale;
+
+    CGFloat framebufferScale = view.window.screen ?
+        view.window.screen.scale : UIScreen.mainScreen.scale;
+
+    io.DisplaySize = ImVec2(view.bounds.size.width, view.bounds.size.height);
     io.DisplayFramebufferScale = ImVec2(framebufferScale, framebufferScale);
     io.DeltaTime = 1.0f / float(view.preferredFramesPerSecond ?: 60);
 
@@ -120,41 +122,61 @@ static bool showMenu = false; // keeps track for showChange
     id<MTLRenderCommandEncoder> renderEncoder =
         [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
 
-    ImGui_ImplMetal_NewFrame(renderPassDescriptor);
+    // 🔥 THIS WAS MISSING — REQUIRED FOR INPUT TO WORK
+    ImGui_ImplMetal_NewFrame(view);
     ImGui::NewFrame();
 
     if (MenDeal) {
+
         ImGui::SetNextWindowSize(ImVec2(460, 610), ImGuiCond_FirstUseEver);
-        ImGui::Begin("M1-V1 | Companion Spawner", &MenDeal);
 
-        ImGui::Combo("Category", &selected_category, categories, IM_ARRAYSIZE(categories));
-        if (selected_category == 0) ImGui::Combo("Item", &selected_item_idx, gadgets, IM_ARRAYSIZE(gadgets));
-        else if (selected_category == 1) ImGui::Combo("Item", &selected_item_idx, weapons, IM_ARRAYSIZE(weapons));
-        else if (selected_category == 2) ImGui::Combo("Item", &selected_item_idx, explosives, IM_ARRAYSIZE(explosives));
-        else if (selected_category == 3) ImGui::Combo("Item", &selected_item_idx, loot, IM_ARRAYSIZE(loot));
-        else if (selected_category == 4) ImGui::Combo("Item", &selected_item_idx, troll, IM_ARRAYSIZE(troll));
+        if (ImGui::Begin("M1-V1 | Companion Spawner", &MenDeal)) {
 
-        ImGui::SliderInt("Hue", &item_hue, 0, 360);
-        ImGui::SliderInt("Saturation", &item_saturation, 0, 255);
-        ImGui::SliderInt("Size", &item_size, -5, 10);
+            ImGui::Combo("Category", &selected_category, categories, IM_ARRAYSIZE(categories));
 
-        ImGui::Combo("Area", &selected_location, locations, IM_ARRAYSIZE(locations));
-        if (selected_location == 5) ImGui::InputFloat3("X, Y, Z", custom_coords);
+            if (selected_category == 0)
+                ImGui::Combo("Item", &selected_item_idx, gadgets, IM_ARRAYSIZE(gadgets));
+            else if (selected_category == 1)
+                ImGui::Combo("Item", &selected_item_idx, weapons, IM_ARRAYSIZE(weapons));
+            else if (selected_category == 2)
+                ImGui::Combo("Item", &selected_item_idx, explosives, IM_ARRAYSIZE(explosives));
+            else if (selected_category == 3)
+                ImGui::Combo("Item", &selected_item_idx, loot, IM_ARRAYSIZE(loot));
+            else if (selected_category == 4)
+                ImGui::Combo("Item", &selected_item_idx, troll, IM_ARRAYSIZE(troll));
 
-        if (ImGui::Button("SPAWN ITEM", ImVec2(-1, 52))) {
-            int item_id = GetRealItemID(selected_category, selected_item_idx);
-            Vec3 coords = GetTargetCoordinates(selected_location);
-            uint64_t network_spawn = 0x14fA0;
-            void (*BypassSpawn)(float, float, float, int, int, int, int) =
-                (void (*)(float, float, float, int, int, int, int))(GetBaseAddress() + network_spawn);
-            BypassSpawn(coords.x, coords.y, coords.z, item_id, item_hue, item_saturation, item_size);
+            ImGui::SliderInt("Hue", &item_hue, 0, 360);
+            ImGui::SliderInt("Saturation", &item_saturation, 0, 255);
+            ImGui::SliderInt("Size", &item_size, -5, 10);
+
+            ImGui::Combo("Area", &selected_location, locations, IM_ARRAYSIZE(locations));
+
+            if (selected_location == 5)
+                ImGui::InputFloat3("X, Y, Z", custom_coords);
+
+            if (ImGui::Button("SPAWN ITEM", ImVec2(-1, 52))) {
+
+                int item_id = GetRealItemID(selected_category, selected_item_idx);
+                Vec3 coords = GetTargetCoordinates(selected_location);
+
+                uint64_t network_spawn = 0x14fA0;
+
+                void (*BypassSpawn)(float, float, float, int, int, int, int) =
+                (void (*)(float, float, float, int, int, int, int))
+                (GetBaseAddress() + network_spawn);
+
+                BypassSpawn(coords.x, coords.y, coords.z,
+                            item_id, item_hue, item_saturation, item_size);
+            }
         }
 
         ImGui::End();
     }
 
     ImGui::Render();
-    ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(), commandBuffer, renderEncoder);
+    ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(),
+                                   commandBuffer,
+                                   renderEncoder);
 
     [renderEncoder endEncoding];
     [commandBuffer presentDrawable:view.currentDrawable];
