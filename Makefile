@@ -1,4 +1,4 @@
-export THEOS=/var/jb/var/mobile/theos # Or wherever your theos is
+export THEOS=/var/jb/var/mobile/theos
 ARCHS = arm64
 DEBUG = 0
 FINALPACKAGE = 1
@@ -8,7 +8,7 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = X2NIOSVN
 
-# Compile only what we need: Entry point, ImGui Menu, KittyMemory, and ImGui source
+# Compile Entry point, ImGui Menu, KittyMemory, and ImGui source
 X2NIOSVN_FILES = PubgLoad.mm \
                  ImGuiDrawView.mm \
                  KittyMemory/KittyMemory.cpp \
