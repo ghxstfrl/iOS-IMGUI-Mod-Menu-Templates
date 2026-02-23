@@ -1,4 +1,3 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
 diff --git a/X2NIOSVN.plist b/X2NIOSVN.plist
 index 5dc896c524204ef9888f0035fd56099b291d9a68..794ea57cd4613e46f5157d05ba96d8bb213a60d1 100644
 --- a/X2NIOSVN.plist
@@ -23,6 +22,3 @@ index 5dc896c524204ef9888f0035fd56099b291d9a68..794ea57cd4613e46f5157d05ba96d8bb
  	</dict>
  </dict>
  </plist>
- 
-EOF
-)
