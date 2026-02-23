@@ -5,8 +5,8 @@
 #include "KittyMemory/imgui.h"
 #include "KittyMemory/imgui_impl_metal.h"
 #import "Esp/CaptainHook.h"
-#include <cmath>
-#include <mach-o/dyld.h>
+#import <cmath>
+#import <mach-o/dyld.h>
 
 #define kWidth [UIScreen mainScreen].bounds.size.width
 #define kHeight [UIScreen mainScreen].bounds.size.height
@@ -76,7 +76,7 @@ static inline uint64_t GetBaseAddress() {
 
 @implementation ImGuiDrawView
 
-static bool MenDeal = true; // start open to verify it works
+static bool MenDeal = true; // menu starts open
 
 + (void)showChange:(BOOL)open {
     MenDeal = open;
@@ -94,12 +94,30 @@ static bool MenDeal = true; // start open to verify it works
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    ImGui::StyleColorsClassic();
+    ImGui::StyleColorsDark(); // dark base style
+
+    // Purple neon style
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 10.0f;
+    style.FrameRounding = 6.0f;
+    style.ScrollbarRounding = 6.0f;
+    style.GrabRounding = 6.0f;
+    style.FramePadding = ImVec2(10, 6);
+    style.WindowPadding = ImVec2(12, 12);
+
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.15f, 0.0f, 0.25f, 0.95f); // dark purple
+    style.Colors[ImGuiCol_Button] = ImVec4(0.6f, 0.2f, 1.0f, 0.9f);
+    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.8f, 0.4f, 1.0f, 0.95f);
+    style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.9f, 0.6f, 1.0f, 1.0f);
+    style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.7f, 0.3f, 1.0f, 1.0f);
+    style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(0.9f, 0.5f, 1.0f, 1.0f);
+    style.Colors[ImGuiCol_Header] = ImVec4(0.5f, 0.1f, 0.9f, 0.9f);
+    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.7f, 0.3f, 1.0f, 0.95f);
 
     ImGui_ImplMetal_Init(self.device);
 
     NSString *FontPath = @"/System/Library/Fonts/AppFonts/Charter.ttc";
-    io.Fonts->AddFontFromFileTTF(FontPath.UTF8String, 35.f);
+    io.Fonts->AddFontFromFileTTF(FontPath.UTF8String, 22.f);
 
     self.imguiInitialized = YES;
 
@@ -131,9 +149,13 @@ static bool MenDeal = true; // start open to verify it works
     if (MenDeal) {
 
         ImGui::SetNextWindowSize(ImVec2(460, 610), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowBgAlpha(0.95f);
 
-        if (ImGui::Begin("M1-V1 | Companion Spawner", &MenDeal)) {
+        // draggable window with no saved position, nice padding
+        if (ImGui::Begin("M1-V1 | Companion Spawner", &MenDeal,
+                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse)) {
 
+            // Category + Item selection
             ImGui::Combo("Category", &selected_category, categories, IM_ARRAYSIZE(categories));
 
             if (selected_category == 0)
@@ -147,15 +169,18 @@ static bool MenDeal = true; // start open to verify it works
             else if (selected_category == 4)
                 ImGui::Combo("Item", &selected_item_idx, troll, IM_ARRAYSIZE(troll));
 
+            // Sliders
             ImGui::SliderInt("Hue", &item_hue, 0, 360);
             ImGui::SliderInt("Saturation", &item_saturation, 0, 255);
             ImGui::SliderInt("Size", &item_size, -5, 10);
 
+            // Location selection
             ImGui::Combo("Area", &selected_location, locations, IM_ARRAYSIZE(locations));
 
             if (selected_location == 5)
                 ImGui::InputFloat3("X, Y, Z", custom_coords);
 
+            // Spawn button
             if (ImGui::Button("SPAWN ITEM", ImVec2(-1, 52))) {
 
                 int item_id = GetRealItemID(selected_category, selected_item_idx);
@@ -170,9 +195,18 @@ static bool MenDeal = true; // start open to verify it works
                 BypassSpawn(coords.x, coords.y, coords.z,
                             item_id, item_hue, item_saturation, item_size);
             }
+
+            // Credit text at the bottom
+            ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 25);
+            ImGui::TextColored(ImVec4(0.8f, 0.5f, 1.0f, 1.0f), "Created by GhxstFRL");
+
+            // Only capture input if mouse/finger is over the menu
+            io.WantCaptureMouse = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
         }
 
         ImGui::End();
+    } else {
+        io.WantCaptureMouse = false;
     }
 
     ImGui::Render();
