@@ -66,9 +66,9 @@ static UIWindow *GetActiveWindow(void) {
                               (uint64_t)(1 * NSEC_PER_SEC),
                               (uint64_t)(0.2 * NSEC_PER_SEC));
 
-    __weak typeof(self) weakSelf = self;
+    __weak PubgLoad *weakSelf = self;
     dispatch_source_set_event_handler(self.watchdogTimer, ^{
-        typeof(self) strongSelf = weakSelf;
+        PubgLoad *strongSelf = weakSelf;
         if (!strongSelf) return;
         [strongSelf setupMenuButton];
     });
@@ -80,10 +80,10 @@ static UIWindow *GetActiveWindow(void) {
     [self initTapGes];
     [self initTapGes2];
 
-    __weak typeof(self) weakSelf = self;
+    __weak PubgLoad *weakSelf = self;
     [[MenuAPIClient shared] validateMenuAccessWithCompletion:^(BOOL allowed, NSString * _Nullable message) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            typeof(self) strongSelf = weakSelf;
+            PubgLoad *strongSelf = weakSelf;
             if (!strongSelf) return;
 
             strongSelf.apiAllowsMenu = strongSelf.apiAllowsMenu || allowed;
