@@ -1,11 +1,13 @@
-TARGET := iphone:clang:latest:latest
-INSTALL_TARGET_PROCESSES = ACCompanion
+#!/usr/bin/env bash
+set -euo pipefail
 
-include $(THEOS)/makefiles/common.mk
+export THEOS="${THEOS:-/var/mobile/theos}"
 
-TWEAK_NAME = X2NIOSVN
+if [[ ! -f "$THEOS/makefiles/common.mk" || ! -f "$THEOS/makefiles/tweak.mk" ]]; then
+ echo "[error] THEOS is not configured correctly: $THEOS"
+ echo "[hint] Install Theos and/or export THEOS to the correct path."
+ echo "[hint] Example: export THEOS=$HOME/theos"
+ exit 1
+fi
 
-X2NIOSVN_FILES = ImGuiDrawView.mm Esp/*.m Esp/*.mm KittyMemory/*.cpp
-X2NIOSVN_CFLAGS = -fobjc-arc
-
-include $(THEOS_MAKE_PATH)/tweak.mk
+make clean package install
