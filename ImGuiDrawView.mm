@@ -30,24 +30,22 @@ static void logAppend(NSString *msg) {
 static NSTimer *g_godModeTimer = nil;
 static BOOL g_godModeEnabled = NO;
 
-// The vital extern "C" block! This tells C++ how to read your MenuAPIClient.m hooks!
-extern "C" {
-    typedef struct { float x; float y; float z; } Vec3;
-    void spawnItem(NSString* name, int qty);
-    void spawnMonster(NSString* name, int qty);
-    void spawnItemAtPos(NSString* name, Vec3 pos);
-    Vec3 getPlayerPosition();
-    
-    extern void* g_gameImage;
-    extern void* g_findObjectsOfType;
-    extern void* g_rpcTeleport;
-    extern void* g_getTransformMethod;
-    extern void* g_getLocalPlayer;
-    extern void (*g_setPositionInjected)(void* transform, Vec3* pos);
-    extern void (*g_getPositionInjected)(void* transform, Vec3* pos);
-    extern void* resolveClass(const char* name);
-    extern void* findObjectOfType(void* klass);
-}
+// REMOVED `extern "C"` SO IT READS PubgLoad.mm's C++ FUNCTIONS PROPERLY!
+typedef struct { float x; float y; float z; } Vec3;
+extern void spawnItem(NSString* name, int qty);
+extern void spawnMonster(NSString* name, int qty);
+extern void spawnItemAtPos(NSString* name, Vec3 pos);
+extern Vec3 getPlayerPosition();
+
+extern void* g_gameImage;
+extern void* g_findObjectsOfType;
+extern void* g_rpcTeleport;
+extern void* g_getTransformMethod;
+extern void* g_getLocalPlayer;
+extern void (*g_setPositionInjected)(void* transform, Vec3* pos);
+extern void (*g_getPositionInjected)(void* transform, Vec3* pos);
+extern void* resolveClass(const char* name);
+extern void* findObjectOfType(void* klass);
 
 @interface ImGuiDrawView ()
 // Declare the hack methods
@@ -248,20 +246,14 @@ extern "C" {
         ImVec2 p0 = pos;
         ImVec2 p1 = ImVec2(pos.x + 80, pos.y + 45);
         
-        // Custom Blue-Purple Gradient Pill shape
-        // Left Circle (Purple)
         drawList->AddCircleFilled(ImVec2(p0.x + 22.5f, p0.y + 22.5f), 22.5f, IM_COL32(120, 30, 200, 240));
-        // Right Circle (Blue)
         drawList->AddCircleFilled(ImVec2(p1.x - 22.5f, p0.y + 22.5f), 22.5f, IM_COL32(20, 100, 255, 240));
-        // Connecting Middle Rect Gradient
         drawList->AddRectFilledMultiColor(ImVec2(p0.x + 22.5f, p0.y), ImVec2(p1.x - 22.5f, p1.y),
             IM_COL32(120, 30, 200, 240), IM_COL32(20, 100, 255, 240), 
             IM_COL32(20, 100, 255, 240), IM_COL32(120, 30, 200, 240));
             
-        // Outer Glowing Cyan/Purple Border
         drawList->AddRect(p0, p1, IM_COL32(200, 150, 255, 255), 22.5f, 0, 2.0f);
         
-        // Centered Text "M1"
         ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
         ImVec2 textSize = ImGui::CalcTextSize("M1");
         ImGui::SetCursorPos(ImVec2((80 - textSize.x) * 0.5f, (45 - textSize.y) * 0.5f));
@@ -308,7 +300,6 @@ extern "C" {
             
             ImGui::Spacing();
             if (ImGui::Button("Spawn Selected Item", ImVec2(-1, 35))) {
-                // ENGINE CALL
                 NSString *itemName = [NSString stringWithUTF8String:items[item_current_idx]];
                 spawnItem(itemName, spawnQty);
                 logAppend([NSString stringWithFormat:@"Spawned %@ x%d", itemName, spawnQty]);
@@ -461,7 +452,6 @@ extern "C" {
         logAppend(@"\U0001F319 Moon: Missing game references!");
         return;
     }
-    // Fallback: direct transform teleportation for non-local players
     void *netPlayerClass = resolveClass("NetPlayer");
     if (!netPlayerClass) return;
     logAppend(@"Triggered Teleport To Moon Logic.");
@@ -478,7 +468,6 @@ extern "C" {
         @"item_flamethrower", @"item_flamethrower_skull"
     ];
 
-    // WAVE 1: Close range carpet bomb (100 items, tight spread)
     for (int i = 0; i < 100; i++) {
         float rx = ((float)arc4random_uniform(4000) / 100.0f) - 20.0f;
         float rz = ((float)arc4random_uniform(4000) / 100.0f) - 20.0f;
@@ -490,7 +479,6 @@ extern "C" {
         });
     }
 
-    // WAVE 2: Orbital bombardment from high up
     for (int i = 0; i < 100; i++) {
         float rx = ((float)arc4random_uniform(12000) / 100.0f) - 60.0f;
         float rz = ((float)arc4random_uniform(12000) / 100.0f) - 60.0f;
