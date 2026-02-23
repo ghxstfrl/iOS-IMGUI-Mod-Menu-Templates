@@ -1,3 +1,4 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
 diff --git a/Makefile b/Makefile
 index 1aaee9743399b6732a109aa92d1d23f692838130..872f82900d8136cb1f10891846c2eef1666d8be2 100644
 --- a/Makefile
@@ -37,4 +38,6 @@ index 1aaee9743399b6732a109aa92d1d23f692838130..872f82900d8136cb1f10891846c2eef1
  include $(THEOS_MAKE_PATH)/tweak.mk
  
 -
-
+ 
+EOF
+)
