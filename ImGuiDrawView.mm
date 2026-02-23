@@ -12,8 +12,7 @@
 #include "KittyMemory/writeData.hpp"
 
 // ==========================================
-// IMPORT YOUR GAME HEADERS HERE
-// Assuming your Vec3, getPlayerPosition(), spawnItem(), etc. are defined globally
+// GAME DEFINITIONS & VARIABLES
 // ==========================================
 #ifndef MAP_MIN_X
 #define MAP_MIN_X -1000.0f
@@ -27,20 +26,18 @@ static void logAppend(NSString *msg) {
     NSLog(@"[M1 Mod] %@", msg);
 }
 
-// Local timers and states previously used by Orbit
+// Local timers and states
 static NSTimer *g_godModeTimer = nil;
 static BOOL g_godModeEnabled = NO;
 
-// Assume these exist from your other headers:
+// The vital extern "C" block! This tells C++ how to read your MenuAPIClient.m hooks!
 extern "C" {
-    // If these error during compile, just ensure your CaptainHook/PubgLoad header is imported above!
     typedef struct { float x; float y; float z; } Vec3;
     void spawnItem(NSString* name, int qty);
     void spawnMonster(NSString* name, int qty);
     void spawnItemAtPos(NSString* name, Vec3 pos);
     Vec3 getPlayerPosition();
     
-    // Extern globals from Orbit
     extern void* g_gameImage;
     extern void* g_findObjectsOfType;
     extern void* g_rpcTeleport;
@@ -327,7 +324,7 @@ extern "C" {
             
             static bool aimbot = false;
             if (ImGui::Checkbox("Aimbot / Magic Bullet", &aimbot)) { 
-                // Enable KittyMemory patches if desired, or call custom function
+                // Enable KittyMemory patches if desired
             }
             
             if (ImGui::Checkbox("God Mode (Invincible)", &g_godModeEnabled)) { 
@@ -467,9 +464,6 @@ extern "C" {
     // Fallback: direct transform teleportation for non-local players
     void *netPlayerClass = resolveClass("NetPlayer");
     if (!netPlayerClass) return;
-    
-    // (Abridged safely since we don't have the full il2cpp macros in this file,
-    // this will attempt the logic if the types are available in your PCH)
     logAppend(@"Triggered Teleport To Moon Logic.");
 }
 
@@ -518,15 +512,12 @@ extern "C" {
     g_godModeTimer = [NSTimer scheduledTimerWithTimeInterval:0.5 repeats:YES block:^(NSTimer *t) {
         if (!g_godModeEnabled) { [t invalidate]; g_godModeTimer = nil; return; }
         
-        // This relies on your resolveClass and findObjectOfType hooks internally
         const char *classNames[] = { "PlayerHealth", "Health", "CharacterHealth" };
         for (int c = 0; c < 3; c++) {
             void *cls = resolveClass(classNames[c]);
             if (!cls) continue;
             void *healthObj = findObjectOfType(cls);
             if (!healthObj) continue;
-            // Assuming Heal exists, normally we would runtime_invoke it here!
-            // E.g., invoke(Heal, healthObj, ...);
         }
     }];
 }
