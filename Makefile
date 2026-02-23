@@ -8,9 +8,9 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = X2NIOSVN
 
-# Compile Entry point, ImGui Menu, KittyMemory, and ImGui source
-X2NIOSVN_FILES = PubgLoad.mm \
-                 ImGuiDrawView.mm \
+# If ImGuiDrawView is ALSO in the esp folder:
+X2NIOSVN_FILES = Esp/PubgLoad.mm \
+                 Esp/ImGuiDrawView.mm \
                  KittyMemory/KittyMemory.cpp \
                  KittyMemory/MemoryPatch.cpp \
                  KittyMemory/KittyUtils.cpp \
