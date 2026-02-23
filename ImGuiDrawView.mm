@@ -189,5 +189,5 @@ static void SetupM1V1Theme() {
      }
      [commandBuffer commit];
  }
- - (void)mtkView:(MTKView*)view drawableSizeWillChange:(CGSize)size { }
+ - (void)mtkView:(MTKView*)view drawableSizeWillChange:(CGSize)size { }}
  @end
