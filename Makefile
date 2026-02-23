@@ -8,8 +8,10 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = X2NIOSVN
 
-# This exactly matches the repo layout you just showed me!
+# Added your game hook files back to the compilation list!
 X2NIOSVN_FILES = Esp/PubgLoad.mm \
+                 Esp/MenuAPIClient.m \
+                 Esp/JHPP.m \
                  ImGuiDrawView.mm \
                  KittyMemory/KittyMemory.cpp \
                  KittyMemory/MemoryPatch.cpp \
@@ -24,7 +26,7 @@ X2NIOSVN_FILES = Esp/PubgLoad.mm \
 
 X2NIOSVN_FRAMEWORKS = UIKit Foundation Security QuartzCore CoreGraphics CoreText Metal MetalKit
 
-# These -I flags tell the compiler exactly where to look for your .h and .hpp files!
 X2NIOSVN_CCFLAGS = -std=c++14 -fno-rtti -fno-exceptions -DNDEBUG -I./Esp -I./KittyMemory
 X2NIOSVN_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-value -I./Esp -I./KittyMemory
+
 include $(THEOS_MAKE_PATH)/tweak.mk
