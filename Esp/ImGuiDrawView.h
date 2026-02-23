@@ -1,10 +1,10 @@
 #import <UIKit/UIKit.h>
 #import <MetalKit/MetalKit.h>
-#import "modpanel/ModPanel.h"
 
-@interface ImGuiDrawView : UIViewController <MTKViewDelegate>
+@interface ImGuiDrawView : MTKView <MTKViewDelegate>
+@property (nonatomic, strong) id<MTLCommandQueue> commandQueue;
+@property (nonatomic, assign) BOOL isMenuVisible;
 
-// Needed for PubgLoad.mm toggle
-+ (void)showChange:(BOOL)open;
-
++ (instancetype)sharedInstance;
++ (void)showMenu;
 @end
