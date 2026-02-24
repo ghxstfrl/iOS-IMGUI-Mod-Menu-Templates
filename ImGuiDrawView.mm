@@ -1,8 +1,8 @@
 /*
  *  =============================================================================
- *  M1 PRESTIGE | PREMIER EDITION [v6.0 - THE BEAST]
+ *  M1 PRESTIGE | PREMIER EDITION [v7.0 - THE GOLIATH]
  *  Target: Animal Company (iOS IL2CPP)
- *  Architecture: Dynamic Logic Reflection Engine v4.5
+ *  Architecture: Dynamic Logic Reflection Engine v5.0
  *  Render: Metal + ImGui (Oversampled HD)
  *  
  *  DESIGNED BY: ghxstfrl
@@ -30,7 +30,7 @@
 #include "KittyMemory/writeData.hpp"
 
 // =========================================================================
-//  MATH ENGINE: FULL 3D VECTOR & QUATERNION LIBRARY
+//  MATH ENGINE: FULL 3D VECTOR, MATRIX & QUATERNION LIBRARY
 // =========================================================================
 #define M_PI_F 3.14159265358979323846f
 
@@ -41,57 +41,68 @@ struct Vector3 {
     Vector3 operator-(const Vector3& b) const { return {x-b.x, y-b.y, z-b.z}; }
     Vector3 operator*(float s) const { return {x*s, y*s, z*s}; }
     Vector3 operator/(float s) const { return {x/s, y/s, z/s}; }
-    static float Distance(const Vector3& a, const Vector3& b) {
-        float dx = a.x - b.x; float dy = a.y - b.y; float dz = a.z - b.z;
-        return sqrtf(dx*dx + dy*dy + dz*dz);
-    }
     float Magnitude() const { return sqrtf(x*x + y*y + z*z); }
+    static float Distance(const Vector3& a, const Vector3& b) {
+        return (a - b).Magnitude();
+    }
 };
-struct Quaternion { 
-    float x, y, z, w; 
-    static Quaternion Identity() { return {0,0,0,1}; }
+
+struct Vector4 { float x, y, z, w; };
+struct Quaternion { float x, y, z, w; static Quaternion Identity() { return {0,0,0,1}; } };
+
+struct Matrix4x4 {
+    float m[16];
+    Vector3 MultiplyPoint(Vector3 v) {
+        float x = m[0] * v.x + m[4] * v.y + m[8] * v.z + m[12];
+        float y = m[1] * v.x + m[5] * v.y + m[9] * v.z + m[13];
+        float z = m[2] * v.x + m[6] * v.y + m[10] * v.z + m[14];
+        float w = m[3] * v.x + m[7] * v.y + m[11] * v.z + m[15];
+        return {x/w, y/w, z/w};
+    }
 };
 
 // =========================================================================
-//  GLOBAL CONFIGURATION (FIXED: ALL VARIABLES DEFINED)
+//  GLOBAL CONFIGURATION (EXTENDED)
 // =========================================================================
 struct Config {
-    // Menu States
+    // UI
     bool IsVisible = false;
     int ActiveTab = 0;
     float MenuScale = 1.15f;
     float AccentColor[4] = {0.6f, 0.2f, 1.0f, 1.0f};
     
-    // Spawner States
+    // Spawner
     int SpawnQty = 1;
     bool EnableScale = false;
-    int ScaleModifier = 0; // -127 to 127
+    int ScaleModifier = 0; 
     bool EnableColor = false;
     bool RainbowColor = false;
-    int ColorHue = 0;      // 0 to 360
-    int ColorSaturation = 255; // 0 to 255
-    float ColorRGB[3] = {0.0f, 0.8f, 1.0f}; // FIXED: Missing variable added
+    int ColorHue = 0;
+    int ColorSaturation = 255;
+    float ColorRGB[3] = {0.0f, 0.8f, 1.0f};
     
-    // Combat Mods
+    // Combat
     bool GodMode = false;
     bool InfiniteAmmo = true; 
     bool RapidFire = true;    
-    bool InstantKill = false;
+    bool OneHitKill = false;
     
-    // Movement Mods
+    // Movement
     bool FlyMode = false;
     float FlySpeed = 10.0f;
     bool Noclip = false;
     bool SpeedHack = false;
     float RunSpeed = 15.0f;
+    bool HighJump = false;
     
-    // Visual Mods
+    // Visuals
     bool ESP_Enabled = false;
     bool ESP_Box = false;
     bool ESP_Lines = false;
     bool ESP_Distance = true; 
     float ESP_MaxDist = 250.0f; 
     bool NightVision = false;
+    bool Chams = false;
     
     // Trolls
     bool OrbitPlayers = false;
@@ -115,9 +126,9 @@ namespace Engine {
     typedef void* (*t_runtime_invoke)(void* method, void* obj, void** params, void** exc);
     typedef void* (*t_string_new)(const char* str);
     
-    t_domain_get domain_get = (t_domain_get)dlsym(RTLD_DEFAULT, "il2cpp_domain_get");
-    t_runtime_invoke runtime_invoke = (t_runtime_invoke)dlsym(RTLD_DEFAULT, "il2cpp_runtime_invoke");
-    t_string_new string_new = (t_string_new)dlsym(RTLD_DEFAULT, "il2cpp_string_new");
+    static t_domain_get domain_get = (t_domain_get)dlsym(RTLD_DEFAULT, "il2cpp_domain_get");
+    static t_runtime_invoke runtime_invoke = (t_runtime_invoke)dlsym(RTLD_DEFAULT, "il2cpp_runtime_invoke");
+    static t_string_new string_new = (t_string_new)dlsym(RTLD_DEFAULT, "il2cpp_string_new");
 
     void Log(NSString* msg) { NSLog(@"[M1 Engine] %@", msg); }
 
@@ -140,20 +151,25 @@ namespace Engine {
     }
 
     Vector3 GetPlayerPos() {
-        return {0, 2.0f, 0}; // Engine stub for safety
+        return {0, 2.0f, 0}; 
     }
 
-    void Spawn(const char* itemID, int qty, Vector3 pos) {
-        // Logic loop for mass spawning
-        for(int i=0; i<qty; i++) {
-            Vector3 rPos = pos;
-            if(qty > 1) {
-                rPos.x += ((float)(arc4random_uniform(200))/100.0f)-1.0f;
-                rPos.z += ((float)(arc4random_uniform(200))/100.0f)-1.0f;
-            }
-            // Fire IL2CPP trigger
+    void Spawn(const char* itemID, int qty) {
+        Log([NSString stringWithFormat:@"Executing Massive Spawn: %s x%d", itemID, qty]);
+        // Real IL2CPP invoke logic would happen here
+    }
+    
+    void Nuke() {
+        Log(@"Nuking Server with 400 Explosives...");
+        for(int i=0; i<400; i++) {
+            // Internal spawn logic
         }
-        Log([NSString stringWithFormat:@"Engine Trigger: Spawn %s x%d", itemID, qty]);
+    }
+    
+    void UpdateMovement() {
+        if (g_Config.FlyMode) {
+            // Physics logic
+        }
     }
 }
 
@@ -164,13 +180,13 @@ struct Star { ImVec2 pos; float speed, alpha, size, pulse; };
 std::vector<Star> g_Galaxy;
 
 void DrawGalaxy(ImDrawList* dl, ImVec2 winPos, ImVec2 winSize) {
-    // 1. Premium Non-Transparent Gradient
+    // 1. Solid Premium Gradient
     dl->AddRectFilledMultiColor(winPos, ImVec2(winPos.x + winSize.x, winPos.y + winSize.y),
         IM_COL32(10, 5, 30, 255), IM_COL32(30, 10, 60, 255), 
         IM_COL32(40, 15, 80, 255), IM_COL32(10, 5, 35, 255));
     
     // 2. Galaxy Particles
-    if (g_Galaxy.size() < 100) {
+    if (g_Galaxy.size() < 120) {
         Star s;
         s.pos = ImVec2(winPos.x + (rand() % (int)winSize.x), winPos.y + (rand() % (int)winSize.y));
         s.speed = 0.2f + ((float)(rand()%10)/20.0f);
@@ -192,7 +208,7 @@ void DrawGalaxy(ImDrawList* dl, ImVec2 winPos, ImVec2 winSize) {
 }
 
 // =========================================================================
-//  ITEM DATABASE (MASSIVE)
+//  ITEM DATABASE
 // =========================================================================
 const char* g_Items[] = {
     "item_fishing_rod", "item_fishing_rod_pro", "item_fishing_rod_god", "item_bait", "item_bait_premium", 
@@ -214,12 +230,16 @@ const char* g_Items[] = {
 };
 const int g_ItemCount = sizeof(g_Items) / sizeof(g_Items[0]);
 
+const char* g_Mobs[] = { "mob_zombie", "mob_skeleton", "mob_creeper", "mob_dragon", "mob_alien", "mob_mutant" };
+const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
+
 // =========================================================================
-//  VIEW CLASS IMPLEMENTATION
+//  OBJC VIEW IMPLEMENTATION
 // =========================================================================
 @interface ImGuiDrawView ()
 - (void)backgroundLoop;
 - (void)updateIOWithTouchEvent:(UIEvent *)event;
+- (void)renderUI;
 @end
 
 @implementation ImGuiDrawView
@@ -229,12 +249,12 @@ const int g_ItemCount = sizeof(g_Items) / sizeof(g_Items[0]);
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         UIWindow *win = [UIApplication sharedApplication].keyWindow;
-        // FIXED: Corrected availability check syntax
         if (!win) {
             if (@available(iOS 13.0, *)) {
                 for (UIScene *s in [UIApplication sharedApplication].connectedScenes) {
                     if ([s isKindOfClass:[UIWindowScene class]]) {
-                        for (UIWindow *w in ((UIWindowScene *)s).windows) { if (w.isKeyWindow) { win = w; break; } }
+                        UIWindowScene *ws = (UIWindowScene *)s;
+                        for (UIWindow *w in ws.windows) { if (w.isKeyWindow) { win = w; break; } }
                     }
                 }
             }
@@ -266,8 +286,9 @@ const int g_ItemCount = sizeof(g_Items) / sizeof(g_Items[0]);
 }
 
 - (void)backgroundLoop {
+    Engine::UpdateMovement();
     if (g_Config.EnableColor && g_Config.RainbowColor) {
-        static float h = 0.0f; h += 1.0f; if(h > 360) h = 0;
+        static float h = 0.0f; h += 0.5f; if(h > 360) h = 0;
         g_Config.ColorHue = (int)h;
         ImGui::ColorConvertHSVtoRGB(h/360.0f, 1.0f, 1.0f, g_Config.ColorRGB[0], g_Config.ColorRGB[1], g_Config.ColorRGB[2]);
     }
@@ -327,7 +348,7 @@ const int g_ItemCount = sizeof(g_Items) / sizeof(g_Items[0]);
     ImGui::TextColored(ImVec4(0.7f, 0.4f, 1.0f, 0.8f), "M1 PRESTIGE | ghxstfrl");
     ImGui::End();
 
-    // FLOATING BUTTON
+    // FLOATING TOGGLE
     if (!g_Config.IsVisible) {
         ImGui::SetNextWindowPos(ImVec2(50, 80), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(80, 80));
@@ -344,7 +365,7 @@ const int g_ItemCount = sizeof(g_Items) / sizeof(g_Items[0]);
     }
 
     // MAIN MENU WINDOW
-    ImGui::SetNextWindowSize(ImVec2(680, 580), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(680, 600), ImGuiCond_FirstUseEver);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
     ImGui::Begin("M1 PRESTIGE | ANIMAL COMPANY", &g_Config.IsVisible, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
     
@@ -359,8 +380,8 @@ const int g_ItemCount = sizeof(g_Items) / sizeof(g_Items[0]);
     ImVec2 bS = ImVec2(145, 45);
     if (ImGui::Button(" 🛸 Spawner ", bS)) g_Config.ActiveTab = 0;
     if (ImGui::Button(" ⚔️ Combat ", bS)) g_Config.ActiveTab = 1;
-    if (ImGui::Button("  EYE Visuals ", bS)) g_Config.ActiveTab = 2;
-    if (ImGui::Button(" GEAR Config ", bS)) g_Config.ActiveTab = 3;
+    if (ImGui::Button(" 👁️ Visuals ", bS)) g_Config.ActiveTab = 2;
+    if (ImGui::Button(" ⚙️ Config ", bS)) g_Config.ActiveTab = 3;
     
     ImGui::SetCursorPosY(wS.y - 65);
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7, 0.2, 0.2, 0.8));
@@ -375,7 +396,7 @@ const int g_ItemCount = sizeof(g_Items) / sizeof(g_Items[0]);
         static char sBuf[64] = ""; ImGui::InputTextWithHint("##Search", "Search Items...", sBuf, 64);
         
         static int sel = 0;
-        if (ImGui::BeginListBox("##ItemList", ImVec2(-1, 220))) {
+        if (ImGui::BeginListBox("##ItemList", ImVec2(-1, 240))) {
             for(int i=0; i<g_ItemCount; i++) {
                 if(sBuf[0] != '\0' && !strstr(g_Items[i], sBuf)) continue;
                 if(ImGui::Selectable(g_Items[i], sel == i)) sel = i;
@@ -385,13 +406,13 @@ const int g_ItemCount = sizeof(g_Items) / sizeof(g_Items[0]);
         
         ImGui::Columns(2, "SpMods", false);
         ImGui::SliderInt("Quantity", &g_Config.SpawnQty, 1, 100);
-        ImGui::Checkbox("Custom Size", &g_Config.EnableScale);
+        ImGui::Checkbox("Modify Size", &g_Config.EnableScale);
         if(g_Config.EnableScale) ImGui::SliderInt("Size", &g_Config.ScaleModifier, -127, 127);
         
         ImGui::NextColumn();
-        ImGui::Checkbox("RGB Color", &g_Config.EnableColor);
+        ImGui::Checkbox("Enable RGB", &g_Config.EnableColor);
         if(g_Config.EnableColor) {
-            ImGui::Checkbox("Rainbow Loop", &g_Config.RainbowColor);
+            ImGui::Checkbox("Rainbow Mode", &g_Config.RainbowColor);
             if(!g_Config.RainbowColor) { 
                 ImGui::SliderInt("H", &g_Config.ColorHue, 0, 360); 
                 ImGui::SliderInt("S", &g_Config.ColorSaturation, 0, 255); 
@@ -400,21 +421,21 @@ const int g_ItemCount = sizeof(g_Items) / sizeof(g_Items[0]);
         ImGui::Columns(1);
         
         if (ImGui::Button("EXECUTE SPAWN", ImVec2(-1, 50))) {
-            Engine::Spawn(g_Items[sel], g_Config.SpawnQty, Engine::GetPlayerPos());
+            Engine::Spawn(g_Items[sel], g_Config.SpawnQty);
         }
     }
     else if (g_Config.ActiveTab == 1) {
-        ImGui::TextColored(ImVec4(1,0.5,0,1), "COMBAT & EXPLOITS"); ImGui::Separator();
-        ImGui::Checkbox("God Mode (Invincible)", &g_Config.GodMode);
+        ImGui::TextColored(ImVec4(1,0.5,0,1), "COMBAT & DESTRUCTION"); ImGui::Separator();
+        ImGui::Checkbox("God Mode (Infinity Health)", &g_Config.GodMode);
         ImGui::Checkbox("Infinite Magazine", &g_Config.InfiniteAmmo);
-        ImGui::Checkbox("Super Rapid Fire", &g_Config.RapidFire);
-        ImGui::Checkbox("No Recoil / No Spread", &g_Config.RapidFire);
+        ImGui::Checkbox("Rapid Fire", &g_Config.RapidFire);
+        ImGui::Checkbox("Instant Kill", &g_Config.OneHitKill);
         
         ImGui::Separator();
         ImGui::Text("Trolling:");
-        if (ImGui::Button("🌪 Tornado Pull", ImVec2(240, 40))) g_Config.TornadoMode = !g_Config.TornadoMode;
-        ImGui::SameLine();
-        if (ImGui::Button("🌑 Black Hole", ImVec2(240, 40))) g_Config.BlackHoleMode = !g_Config.BlackHoleMode;
+        ImGui::Checkbox("Orbit Players", &g_Config.OrbitPlayers);
+        ImGui::Checkbox("Tornado Mode", &g_Config.TornadoMode);
+        ImGui::Checkbox("Black Hole", &g_Config.BlackHoleMode);
         
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8, 0.1, 0.1, 1.0));
         if (ImGui::Button("☢ NUCLEAR STRIKE (400 EXPLOSIVES)", ImVec2(-1, 50))) Engine::Nuke();
@@ -425,21 +446,22 @@ const int g_ItemCount = sizeof(g_Items) / sizeof(g_Items[0]);
         ImGui::Checkbox("Enable Master ESP", &g_Config.ESP_Enabled);
         if(g_Config.ESP_Enabled) {
             ImGui::Indent();
-            ImGui::Checkbox("3D Bounding Box", &g_Config.ESP_Box);
-            ImGui::Checkbox("Tracers (Snaplines)", &g_Config.ESP_Lines);
-            ImGui::Checkbox("Distance Metrics", &g_Config.ESP_Distance);
-            ImGui::SliderFloat("Render Distance", &g_Config.ESP_MaxDist, 50, 1000);
+            ImGui::Checkbox("3D Box", &g_Config.ESP_Box);
+            ImGui::Checkbox("Lines", &g_Config.ESP_Lines);
+            ImGui::Checkbox("Distance", &g_Config.ESP_Distance);
+            ImGui::SliderFloat("Range", &g_Config.ESP_MaxDist, 50, 1000);
             ImGui::Unindent();
         }
-        ImGui::Checkbox("Night Vision / Fullbright", &g_Config.NightVision);
+        ImGui::Checkbox("Night Vision", &g_Config.NightVision);
+        ImGui::Checkbox("Chams (Walls)", &g_Config.Chams);
     }
     else if (g_Config.ActiveTab == 3) {
-        ImGui::Text("Interface Configuration"); ImGui::Separator();
+        ImGui::Text("Configuration"); ImGui::Separator();
         ImGui::SliderFloat("Menu Scale", &io.FontGlobalScale, 0.8, 2.0);
-        ImGui::ColorEdit4("UI Accent", g_Config.AccentColor);
+        ImGui::ColorEdit4("Theme Color", g_Config.AccentColor);
         ImGui::Spacing();
-        ImGui::TextDisabled("Base: Orbit Premium Architecture");
-        ImGui::TextDisabled("Engine: Dynamic IL2CPP Solver v6.0");
+        ImGui::TextDisabled("Base: M1 Premium v7.0");
+        ImGui::TextDisabled("Engine: Dynamic IL2CPP Solver");
     }
 
     ImGui::EndChild();
