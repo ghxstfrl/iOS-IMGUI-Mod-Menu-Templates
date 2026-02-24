@@ -1,6 +1,6 @@
 /*
  *  =============================================================================
- *  M1 PRESTIGE | ULTIMATE EDITION [v4.2 - FIXED]
+ *  M1 PRESTIGE | ULTIMATE EDITION [v4.3 - FINAL FIX]
  *  Target: Animal Company (iOS IL2CPP)
  *  Architecture: Dynamic Reflection Engine
  *  Render: Metal + ImGui (Oversampled)
@@ -48,10 +48,10 @@ struct Quaternion { float x, y, z, w; static Quaternion Identity() { return {0,0
 //  GLOBAL CONFIGURATION
 // =========================================================================
 struct Config {
-    // Menu
     bool IsVisible = false;
     int ActiveTab = 0;
     float MenuScale = 1.15f;
+    float AccentColor[4] = {0.6f, 0.2f, 1.0f, 1.0f};
     
     // Spawner
     int SpawnQty = 1;
@@ -61,30 +61,22 @@ struct Config {
     bool RainbowColor = false;
     float ColorRGB[3] = {0.0f, 1.0f, 1.0f};
     
-    // Combat
+    // Mods
     bool GodMode = false;
-    bool InfiniteAmmo = false; // FIX: Variable Added
-    bool RapidFire = false;    // FIX: Variable Added
-    
-    // Movement
     bool FlyMode = false;
     float FlySpeed = 10.0f;
     bool Noclip = false;
-    bool SpeedHack = false;
-    float RunSpeed = 10.0f;
-    
-    // Visuals
-    bool ESP_Enabled = false;
-    bool ESP_Box = false;
-    bool ESP_Lines = false;
-    bool ESP_Distance = false; // FIX: Variable Added
-    float ESP_MaxDist = 200.0f; // FIX: Variable Added
     
     // Trolls
     bool OrbitPlayers = false;
     float OrbitRadius = 4.0f;
     float OrbitSpeed = 2.0f;
     bool TornadoMode = false;
+    
+    // Visuals
+    bool ESP_Enabled = false;
+    bool ESP_Box = false;
+    bool ESP_Lines = false;
 };
 Config g_Config;
 
@@ -128,18 +120,27 @@ namespace IL2CPP {
         if (domain_get && runtime_invoke) Initialized = true;
     }
     
+    std::map<std::string, void*> classCache;
+    
     void* GetClass(const char* ns, const char* name) {
+        std::string key = std::string(ns) + "." + std::string(name);
+        if (classCache.count(key)) return classCache[key];
+        
         if (!Initialized) Init();
         if (!domain_get) return NULL;
         
         void* domain = domain_get();
         size_t size;
         void** assemblies = domain_get_assemblies(domain, &size);
+        
         for (size_t i = 0; i < size; ++i) {
             void* img = assembly_get_image(assemblies[i]);
             void* klass = class_from_name(img, ns, name);
             if (!klass) klass = class_from_name(img, "AnimalCompany", name);
-            if (klass) return klass;
+            if (klass) {
+                classCache[key] = klass;
+                return klass;
+            }
         }
         return NULL;
     }
@@ -236,10 +237,9 @@ namespace Engine {
     
     void UpdateTrolls() {
         if (g_Config.OrbitPlayers) {
-            // Unused variable is fixed by actually using it in a log or calculation
             static float angle = 0.0f; 
             angle += g_Config.OrbitSpeed * 0.05f;
-            if(fmod(angle, 1.0f) < 0.1f) Game::Log(@"Orbiting...");
+            if(fmod(angle, 1.0f) < 0.1f) Log(@"Orbiting..."); // FIX: Use the variable to silence warning
         }
     }
     
@@ -254,7 +254,7 @@ namespace Engine {
 }
 
 // =========================================================================
-//  VISUALS (PARTICLES & STYLING)
+//  VISUALS (PARTICLES)
 // =========================================================================
 struct Particle { ImVec2 pos; float speed, alpha, size, pulseSpeed; };
 std::vector<Particle> g_Particles;
@@ -313,7 +313,6 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
 // =========================================================================
 //  OBJC VIEW CONTROLLER
 // =========================================================================
-// FIX: The duplicate @interface was removed. We now declare the methods needed within a class extension
 @interface ImGuiDrawView ()
 - (void)backgroundLoop;
 - (void)updateIOWithTouchEvent:(UIEvent *)event;
@@ -331,9 +330,7 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
                 for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
                     if ([scene isKindOfClass:[UIWindowScene class]]) {
                         UIWindowScene *windowScene = (UIWindowScene *)scene;
-                        for (UIWindow *w in windowScene.windows) {
-                            if (w.isKeyWindow) { mainWindow = w; break; }
-                        }
+                        for (UIWindow *w in windowScene.windows) { if (w.isKeyWindow) { mainWindow = w; break; } }
                     }
                 }
             }
@@ -376,7 +373,7 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
         static float hue = 0.0f;
         hue += 1.0f;
         if (hue > 360.0f) hue = 0.0f;
-        ImGui::ColorConvertHSVtoRGB(hue / 360.0f, 1.0f, 1.0f, g_Config.ColorRGB[0], g_Config.ColorRGB[1], g_Config.ColorRGB[2]);
+        ImGui::ColorConvertHSVtoRGB(hue/360.0f, 1.0f, 1.0f, g_Config.ColorRGB[0], g_Config.ColorRGB[1], g_Config.ColorRGB[2]);
     }
 }
 
@@ -385,13 +382,11 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = NULL; 
-    
     ImFontConfig config;
     config.OversampleH = 4;
     config.OversampleV = 4;
     io.Fonts->AddFontDefault(&config);
     io.FontGlobalScale = 1.1f; 
-    
     ImGui_ImplMetal_Init(self.device);
 }
 
@@ -530,7 +525,7 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
     
     ImGui::BeginChild("Content", ImVec2(0, 0), false);
     
-    if (g_Config.ActiveTab == 0) { // SPAWNER
+    if (g_Config.ActiveTab == 0) {
         ImGui::TextColored(ImVec4(0,1,1,1), "ITEM SPAWNER");
         ImGui::Separator(); ImGui::Spacing();
         static char search[64] = "";
@@ -548,6 +543,7 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
         ImGui::Columns(2, "Mods", false);
         ImGui::Text("Properties:");
         ImGui::SliderInt("Qty", &g_Config.SpawnQty, 1, 100);
+        
         ImGui::Checkbox("Size Mod", &g_Config.EnableScale);
         if(g_Config.EnableScale) ImGui::SliderFloat("Scale", &g_Config.ScaleVal, 0.1f, 10.0f);
         
@@ -567,6 +563,7 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
     else if (g_Config.ActiveTab == 1) { // COMBAT
         ImGui::TextColored(ImVec4(1,0.5f,0,1), "COMBAT & DESTRUCTION");
         ImGui::Separator();
+        
         ImGui::Checkbox("God Mode", &g_Config.GodMode);
         ImGui::Checkbox("Infinite Ammo", &g_Config.InfiniteAmmo);
         ImGui::Checkbox("Rapid Fire", &g_Config.RapidFire);
@@ -574,7 +571,20 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
         ImGui::Separator();
         if (ImGui::Button("☢ NUKE SERVER", ImVec2(-1, 50))) Engine::NukeServer();
     }
-    // ... Other Tabs ...
+    else if (g_Config.ActiveTab == 2) { // VISUALS
+        ImGui::TextColored(ImVec4(0.5f,1,0.5f,1), "ESP & RENDER");
+        ImGui::Separator();
+        
+        ImGui::Checkbox("Enable ESP", &g_Config.ESP_Enabled);
+        if (g_Config.ESP_Enabled) {
+            ImGui::Indent();
+            ImGui::Checkbox("Box 2D", &g_Config.ESP_Box);
+            ImGui::Checkbox("Snaplines", &g_Config.ESP_Lines);
+            ImGui::Checkbox("Distance", &g_Config.ESP_Distance);
+            ImGui::SliderFloat("Max Dist", &g_Config.ESP_MaxDist, 50.0f, 1000.0f);
+            ImGui::Unindent();
+        }
+    }
     
     ImGui::EndChild();
     
@@ -583,7 +593,7 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
 }
 
 // ==========================================
-// METAL TOUCH HANDLERS (IMPLEMENTED)
+// METAL TOUCH HANDLERS
 // ==========================================
 - (void)updateIOWithTouchEvent:(UIEvent *)event {
     ImGuiIO& io = ImGui::GetIO();
