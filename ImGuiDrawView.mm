@@ -1,6 +1,6 @@
 /*
  *  =============================================================================
- *  M1 PRESTIGE | PREMIER EDITION [v7.0 - THE GOLIATH]
+ *  GHOST MENU | PREMIER EDITION [vX.X]
  *  Target: Animal Company (iOS IL2CPP)
  *  Architecture: Dynamic Logic Reflection Engine v5.0
  *  Render: Metal + ImGui (Oversampled HD)
@@ -64,12 +64,15 @@ struct Matrix4x4 {
 // =========================================================================
 //  GLOBAL CONFIGURATION (EXTENDED)
 // =========================================================================
+
+// fonts
+ImFont* g_TitleFont = nullptr;
 struct Config {
     // UI
     bool IsVisible = false;
-    int ActiveTab = 0;
+    int ActiveTab = 0; // 0=Items,1=Mods,2=Settings,3=Beta,4=Logs
     float MenuScale = 1.15f;
-    float AccentColor[4] = {0.6f, 0.2f, 1.0f, 1.0f};
+    float AccentColor[4] = {1.0f, 0.8f, 0.0f, 1.0f};
     
     // Spawner
     int SpawnQty = 1;
@@ -80,6 +83,13 @@ struct Config {
     int ColorHue = 0;
     int ColorSaturation = 255;
     float ColorRGB[3] = {0.0f, 0.8f, 1.0f};
+
+    // Mods/Settings data
+    int TargetPlayerIndex = -1;
+    Vector3 SpawnLocation = {0,0,0};
+    bool UseCustomSpawnLoc = false;
+    float CustomX = 0, CustomY = 0, CustomZ = 0;
+    bool MonochromeBg = false; // toggle b/w background
     
     // Combat
     bool GodMode = false;
@@ -113,6 +123,9 @@ struct Config {
 };
 Config g_Config;
 
+// global log storage
+std::vector<std::string> g_Logs;
+
 // =========================================================================
 //  DYNAMIC REFLECTION ENGINE (IL2CPP RESOLVER)
 // =========================================================================
@@ -130,7 +143,7 @@ namespace Engine {
     static t_runtime_invoke runtime_invoke = (t_runtime_invoke)dlsym(RTLD_DEFAULT, "il2cpp_runtime_invoke");
     static t_string_new string_new = (t_string_new)dlsym(RTLD_DEFAULT, "il2cpp_string_new");
 
-    void Log(NSString* msg) { NSLog(@"[M1 Engine] %@", msg); }
+    void Log(NSString* msg) { NSLog(@"[Ghost Engine] %@", msg); }
 
     void* GetClass(const char* ns, const char* name) {
         static t_domain_get_assemblies get_assemblies = (t_domain_get_assemblies)dlsym(RTLD_DEFAULT, "il2cpp_domain_get_assemblies");
@@ -154,9 +167,56 @@ namespace Engine {
         return {0, 2.0f, 0}; 
     }
 
+    // helper to box primitive types (int) for Unity/IL2CPP calls
+    void* BoxInt(int value) {
+        static void* (*il2cpp_box_int)(void*, int) = nullptr;
+        if (!il2cpp_box_int) {
+            il2cpp_box_int = (void*(*)(void*, int))dlsym(RTLD_DEFAULT, "il2cpp_box_value");
+        }
+        // the first argument to il2cpp_box_value is the class for System.Int32;
+        // finding it dynamically is left as an exercise; we'll cache a pointer.
+        static void* intClass = nullptr;
+        if (!intClass) {
+            intClass = GetClass("System", "Int32");
+        }
+        if (il2cpp_box_int && intClass) {
+            return il2cpp_box_int(intClass, value);
+        }
+        return nullptr;
+    }
+
     void Spawn(const char* itemID, int qty) {
+        // try to locate an IL2CPP method to perform the spawn, falls back to log
+        void* spawnClass = GetClass("AnimalCompany", "ItemSpawner");
+        if (!spawnClass) {
+            Log(@"Spawn class not found, check namespace/name");
+        } else {
+            // attempt to find a method called "SpawnItem" or just "Spawn"
+            void* method = nullptr;
+            static t_class_get_method_from_name class_get_method =
+                (t_class_get_method_from_name)dlsym(RTLD_DEFAULT, "il2cpp_class_get_method_from_name");
+            if (class_get_method) {
+                method = class_get_method(spawnClass, "SpawnItem", 2);
+                if (!method) method = class_get_method(spawnClass, "Spawn", 2);
+            }
+            if (method) {
+                void* args[2];
+                args[0] = string_new(itemID);
+                args[1] = BoxInt(qty);
+                runtime_invoke(method, NULL, args, NULL);
+                NSString *msg = [NSString stringWithFormat:@"Spawned %s x%d", itemID, qty];
+                Log(msg);
+                // also add text to log vector
+                g_Logs.push_back([msg UTF8String]);
+                return;
+            } else {
+                Log(@"Spawn method not found on ItemSpawner");
+                g_Logs.push_back("Spawn method not found on ItemSpawner");
+            }
+        }
+
+        // fallback log if reflection failed
         Log([NSString stringWithFormat:@"Executing Massive Spawn: %s x%d", itemID, qty]);
-        // Real IL2CPP invoke logic would happen here
     }
     
     void Nuke() {
@@ -177,13 +237,21 @@ namespace Engine {
 //  GALAXY VISUALS ENGINE
 // =========================================================================
 struct Star { ImVec2 pos; float speed, alpha, size, pulse; };
+struct Ghost { ImVec2 pos; float speed, scale, alpha; };
 std::vector<Star> g_Galaxy;
+std::vector<Ghost> g_Ghosts;
 
 void DrawGalaxy(ImDrawList* dl, ImVec2 winPos, ImVec2 winSize) {
-    // 1. Solid Premium Gradient
-    dl->AddRectFilledMultiColor(winPos, ImVec2(winPos.x + winSize.x, winPos.y + winSize.y),
-        IM_COL32(10, 5, 30, 255), IM_COL32(30, 10, 60, 255), 
-        IM_COL32(40, 15, 80, 255), IM_COL32(10, 5, 35, 255));
+    // 1. Background gradient (monochrome optional)
+    if (g_Config.MonochromeBg) {
+        dl->AddRectFilledMultiColor(winPos, ImVec2(winPos.x + winSize.x, winPos.y + winSize.y),
+            IM_COL32(0, 0, 0, 255), IM_COL32(64, 64, 64, 255), 
+            IM_COL32(192, 192, 192, 255), IM_COL32(255, 255, 255, 255));
+    } else {
+        dl->AddRectFilledMultiColor(winPos, ImVec2(winPos.x + winSize.x, winPos.y + winSize.y),
+            IM_COL32(60, 0, 80, 255), IM_COL32(120, 0, 140, 255), 
+            IM_COL32(160, 0, 200, 255), IM_COL32(80, 0, 100, 255));
+    }
     
     // 2. Galaxy Particles
     if (g_Galaxy.size() < 120) {
@@ -204,6 +272,28 @@ void DrawGalaxy(ImDrawList* dl, ImVec2 winPos, ImVec2 winSize) {
         float p = (sin(time * s.pulse) + 1.0f) * 0.5f;
         dl->AddCircleFilled(s.pos, s.size, IM_COL32(230, 240, 255, (int)(s.alpha * p * 200.0f)));
         if (s.pos.y < winPos.y) { s.pos.y = winPos.y + winSize.y; s.pos.x = winPos.x + (rand() % (int)winSize.x); }
+    }
+    
+    // 3. Ghosts drifting upward (emoji)
+    if (g_Ghosts.size() < 20) {
+        Ghost g;
+        g.pos = ImVec2(winPos.x + (rand() % (int)winSize.x), winPos.y + winSize.y + 20);
+        g.speed = 20.0f + (rand()%30);
+        g.scale = 0.6f + ((rand()%50)/100.0f);
+        g.alpha = 0.3f + ((rand()%70)/100.0f);
+        g_Ghosts.push_back(g);
+    }
+    for (int i=0; i<g_Ghosts.size(); i++) {
+        auto& g = g_Ghosts[i];
+        g.pos.y -= g.speed * dt;
+        ImU32 col = IM_COL32(220,220,255, (int)(g.alpha*255));
+        ImFont* f = ImGui::GetFont();
+        // draw ghost character scaled
+        dl->AddText(f, f->FontSize * g.scale, g.pos, col, "👻");
+        if (g.pos.y < winPos.y) {
+            g.pos.y = winPos.y + winSize.y + 20;
+            g.pos.x = winPos.x + (rand() % (int)winSize.x);
+        }
     }
 }
 
@@ -301,21 +391,38 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
     io.IniFilename = NULL; 
     ImFontConfig cfg; cfg.OversampleH = 4; cfg.OversampleV = 4;
     io.Fonts->AddFontDefault(&cfg);
+    // load a larger bold font for titles if available
+    g_TitleFont = io.Fonts->AddFontFromFileTTF("/System/Library/Fonts/HelveticaNeue-Bold.ttf", 24.0f);
     io.FontGlobalScale = 1.15f; 
     ImGui_ImplMetal_Init(self.device);
 }
 
-- (void)setupStyle {
-    ImGuiStyle& s = ImGui::GetStyle();
-    s.WindowRounding = 18.0f; s.FrameRounding = 10.0f; s.TabRounding = 10.0f; s.WindowBorderSize = 0.0f;
+- (void)setupStyle {    ImGuiStyle& s = ImGui::GetStyle();
+    s.WindowRounding = 12.0f;
+    s.FrameRounding = 6.0f;
+    s.TabRounding = 6.0f;
+    s.WindowBorderSize = 0.0f;
+    s.ChildRounding = 6.0f;
+    s.GrabRounding = 4.0f;
     ImVec4* c = s.Colors;
-    c[ImGuiCol_Text] = ImVec4(0.95f, 0.95f, 1.00f, 1.00f);
-    c[ImGuiCol_Button] = ImVec4(0.25f, 0.15f, 0.50f, 0.85f);
-    c[ImGuiCol_ButtonHovered] = ImVec4(0.40f, 0.25f, 0.75f, 1.00f);
-    c[ImGuiCol_FrameBg] = ImVec4(0.10f, 0.10f, 0.25f, 0.70f);
-    c[ImGuiCol_TabActive] = ImVec4(0.50f, 0.20f, 0.90f, 1.00f);
-    c[ImGuiCol_CheckMark] = ImVec4(0.0f, 0.9f, 1.0f, 1.0f);
-    c[ImGuiCol_SliderGrab] = ImVec4(0.6f, 0.2f, 0.9f, 1.0f);
+
+    // base dark theme
+    c[ImGuiCol_Text] = ImVec4(0.95f, 0.95f, 0.95f, 1.00f);
+    c[ImGuiCol_WindowBg] = ImVec4(0.08f, 0.08f, 0.08f, 0.97f);
+    c[ImGuiCol_ChildBg] = ImVec4(0.10f, 0.10f, 0.10f, 0.95f);
+    c[ImGuiCol_FrameBg] = ImVec4(0.15f, 0.15f, 0.15f, 0.90f);
+    c[ImGuiCol_FrameBgHovered] = ImVec4(0.25f, 0.25f, 0.25f, 0.95f);
+    c[ImGuiCol_Button] = ImVec4(g_Config.AccentColor[0], g_Config.AccentColor[1], g_Config.AccentColor[2], 0.8f);
+    c[ImGuiCol_ButtonHovered] = ImVec4(g_Config.AccentColor[0], g_Config.AccentColor[1], g_Config.AccentColor[2], 1.0f);
+    c[ImGuiCol_ButtonActive] = ImVec4(g_Config.AccentColor[0]*0.8f, g_Config.AccentColor[1]*0.8f, g_Config.AccentColor[2]*0.8f, 1.0f);
+    c[ImGuiCol_Tab] = ImVec4(0.15f, 0.15f, 0.15f, 0.90f);
+    c[ImGuiCol_TabHovered] = ImVec4(g_Config.AccentColor[0], g_Config.AccentColor[1], g_Config.AccentColor[2], 0.7f);
+    c[ImGuiCol_TabActive] = ImVec4(g_Config.AccentColor[0], g_Config.AccentColor[1], g_Config.AccentColor[2], 1.0f);
+    c[ImGuiCol_Header] = ImVec4(0.20f, 0.20f, 0.20f, 0.90f);
+    c[ImGuiCol_HeaderHovered] = ImVec4(g_Config.AccentColor[0], g_Config.AccentColor[1], g_Config.AccentColor[2], 0.6f);
+    c[ImGuiCol_HeaderActive] = ImVec4(g_Config.AccentColor[0], g_Config.AccentColor[1], g_Config.AccentColor[2], 0.8f);
+    c[ImGuiCol_CheckMark] = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
+    c[ImGuiCol_SliderGrab] = ImVec4(0.9f, 0.9f, 0.3f, 1.0f);
 }
 
 - (void)drawInMTKView:(MTKView *)view {
@@ -345,9 +452,11 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
     // WATERMARK
     ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 220, io.DisplaySize.y - 45));
     ImGui::Begin("##W", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground);
-    ImGui::TextColored(ImVec4(0.7f, 0.4f, 1.0f, 0.8f), "M1 PRESTIGE | ghxstfrl");
-    ImGui::End();
-
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.6f, 1.0f, 0.8f));
+        if (g_TitleFont) ImGui::PushFont(g_TitleFont);
+        ImGui::Text("ghost menu | ghxstfrl");
+        if (g_TitleFont) ImGui::PopFont();
+        ImGui::PopStyleColor();
     // FLOATING TOGGLE
     if (!g_Config.IsVisible) {
         ImGui::SetNextWindowPos(ImVec2(50, 80), ImGuiCond_FirstUseEver);
@@ -356,9 +465,12 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
         ImDrawList* dl = ImGui::GetWindowDrawList();
         ImVec2 p = ImGui::GetWindowPos();
         float glow = 28.0f + (sin(time * 3.0f) * 4.0f);
-        dl->AddCircleFilled(ImVec2(p.x+40, p.y+40), 30.0f, IM_COL32(40, 20, 80, 240));
-        dl->AddCircle(ImVec2(p.x+40, p.y+40), glow, IM_COL32(0, 255, 255, 200), 0, 2.5f);
-        ImGui::SetCursorPos(ImVec2(28, 30)); ImGui::Text("M1");
+        dl->AddCircleFilled(ImVec2(p.x+40, p.y+40), 30.0f, IM_COL32(120, 0, 180, 240));
+        dl->AddCircle(ImVec2(p.x+40, p.y+40), glow, IM_COL32(200, 200, 255, 200), 0, 2.5f);
+        ImGui::SetCursorPos(ImVec2(16, 24));
+        if (g_TitleFont) ImGui::PushFont(g_TitleFont);
+        ImGui::Text("ghosty");
+        if (g_TitleFont) ImGui::PopFont();
         if (ImGui::IsWindowHovered() && ImGui::IsMouseReleased(0)) g_Config.IsVisible = true;
         ImGui::End();
         return;
@@ -367,101 +479,197 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
     // MAIN MENU WINDOW
     ImGui::SetNextWindowSize(ImVec2(680, 600), ImGuiCond_FirstUseEver);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
-    ImGui::Begin("M1 PRESTIGE | ANIMAL COMPANY", &g_Config.IsVisible, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
+    ImGui::Begin("ghost", &g_Config.IsVisible, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
     
     ImVec2 wP = ImGui::GetWindowPos(); ImVec2 wS = ImGui::GetWindowSize();
     DrawGalaxy(ImGui::GetWindowDrawList(), wP, wS);
 
-    ImGui::Columns(2, "MainLayout", false); ImGui::SetColumnWidth(0, 160);
-    
-    ImGui::Spacing(); ImGui::SetCursorPosX(35); ImGui::TextColored(ImVec4(0.8,0.4,1,1), "M1 PRESTIGE");
-    ImGui::Spacing(); ImGui::Separator();
-    
-    ImVec2 bS = ImVec2(145, 45);
-    if (ImGui::Button(" 🛸 Spawner ", bS)) g_Config.ActiveTab = 0;
-    if (ImGui::Button(" ⚔️ Combat ", bS)) g_Config.ActiveTab = 1;
-    if (ImGui::Button(" 👁️ Visuals ", bS)) g_Config.ActiveTab = 2;
-    if (ImGui::Button(" ⚙️ Config ", bS)) g_Config.ActiveTab = 3;
-    
-    ImGui::SetCursorPosY(wS.y - 65);
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7, 0.2, 0.2, 0.8));
-    if (ImGui::Button(" UNLOAD ", bS)) [self removeFromSuperview];
+    // credit label bottom-right
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 140, io.DisplaySize.y - 25));
+    ImGui::Begin("##Credit", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f,0.6f,1.0f,0.7f));
+    ImGui::Text("MADE BY GHXSTFRL");
     ImGui::PopStyleColor();
-    
-    ImGui::NextColumn();
+    ImGui::End();
+
+    // top-level tabs (Items / Mods / Settings / Beta / Logs)
+    if (ImGui::BeginTabBar("##MainTabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
+        if (ImGui::BeginTabItem("Items")) { g_Config.ActiveTab = 0; ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("Mods")) { g_Config.ActiveTab = 1; ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("Settings")) { g_Config.ActiveTab = 2; ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("Beta")) { g_Config.ActiveTab = 3; ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("Logs")) { g_Config.ActiveTab = 4; ImGui::EndTabItem(); }
+        ImGui::EndTabBar();
+        // unload button aligned to right
+        ImGui::SameLine(wS.x - 90);
+        if (ImGui::Button("Unload", ImVec2(80, 25))) { [self removeFromSuperview]; }
+    }
+
+    // open content child region so that background galaxy is visible behind
     ImGui::BeginChild("ContentArea", ImVec2(0,0), false, ImGuiWindowFlags_NoBackground);
 
     if (g_Config.ActiveTab == 0) {
-        ImGui::TextColored(ImVec4(0,1,1,1), "ITEM GENERATOR"); ImGui::Separator();
-        static char sBuf[64] = ""; ImGui::InputTextWithHint("##Search", "Search Items...", sBuf, 64);
-        
-        static int sel = 0;
-        if (ImGui::BeginListBox("##ItemList", ImVec2(-1, 240))) {
-            for(int i=0; i<g_ItemCount; i++) {
-                if(sBuf[0] != '\0' && !strstr(g_Items[i], sBuf)) continue;
-                if(ImGui::Selectable(g_Items[i], sel == i)) sel = i;
-            }
-            ImGui::EndListBox();
+        // ITEM PAGE
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1,1,1,1));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+
+        // category tabs across the top
+        static int category = 0;
+        const char* catNames[] = {"All Items","Fishing Rods","Fish","Baits","Weapons"};
+        for(int ci = 0; ci < IM_ARRAYSIZE(catNames); ci++) {
+            if (ci > 0) ImGui::SameLine();
+            if (ImGui::Button(catNames[ci], ImVec2(0, 0))) category = ci;
         }
-        
+        ImGui::Spacing();
+
+        // search field
+        static char sBuf[64] = "";
+        ImGui::InputTextWithHint("##Search", "Search items...", sBuf, 64);
+        ImGui::Separator();
+
+        // item list with scrolling region
+        static int sel = 0;
+        ImGui::BeginChild("ItemListChild", ImVec2(0, 240), true);
+        for(int i=0; i<g_ItemCount; i++) {
+            const char* item = g_Items[i];
+            // category filters
+            if (category == 1 && !strstr(item, "fishing_rod")) continue;
+            if (category == 2 && !strstr(item, "fish_")) continue;
+            if (category == 3 && strstr(item, "bait") == NULL) continue;
+            if (category == 4 && strstr(item, "item_") &&
+                (!strstr(item, "weapon") && !strstr(item, "gun") && !strstr(item, "rpg") && !strstr(item, "grenade") && !strstr(item, "shotgun"))) {
+                // crude weapon filter: if not matching known weapon keywords skip
+            }
+            if(sBuf[0] != '\0' && !strstr(item, sBuf)) continue;
+            if(ImGui::Selectable(item, sel == i)) sel = i;
+        }
+        ImGui::EndChild();
+
+        ImGui::Spacing();
         ImGui::Columns(2, "SpMods", false);
         ImGui::SliderInt("Quantity", &g_Config.SpawnQty, 1, 100);
         ImGui::Checkbox("Modify Size", &g_Config.EnableScale);
         if(g_Config.EnableScale) ImGui::SliderInt("Size", &g_Config.ScaleModifier, -127, 127);
-        
         ImGui::NextColumn();
         ImGui::Checkbox("Enable RGB", &g_Config.EnableColor);
         if(g_Config.EnableColor) {
             ImGui::Checkbox("Rainbow Mode", &g_Config.RainbowColor);
-            if(!g_Config.RainbowColor) { 
-                ImGui::SliderInt("H", &g_Config.ColorHue, 0, 360); 
-                ImGui::SliderInt("S", &g_Config.ColorSaturation, 0, 255); 
+            if(!g_Config.RainbowColor) {
+                ImGui::SliderInt("H", &g_Config.ColorHue, 0, 360);
+                ImGui::SliderInt("S", &g_Config.ColorSaturation, 0, 255);
             }
         }
         ImGui::Columns(1);
-        
-        if (ImGui::Button("EXECUTE SPAWN", ImVec2(-1, 50))) {
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
+
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1, 0.8f, 0, 1));
+        if (ImGui::Button("SPAWN NOW", ImVec2(-1, 50))) {
             Engine::Spawn(g_Items[sel], g_Config.SpawnQty);
         }
+        ImGui::PopStyleColor();
     }
     else if (g_Config.ActiveTab == 1) {
-        ImGui::TextColored(ImVec4(1,0.5,0,1), "COMBAT & DESTRUCTION"); ImGui::Separator();
-        ImGui::Checkbox("God Mode (Infinity Health)", &g_Config.GodMode);
-        ImGui::Checkbox("Infinite Magazine", &g_Config.InfiniteAmmo);
-        ImGui::Checkbox("Rapid Fire", &g_Config.RapidFire);
-        ImGui::Checkbox("Instant Kill", &g_Config.OneHitKill);
-        
+        // MODS PAGE
+        ImGui::TextColored(ImVec4(1,0.8,0,1), "MONEY");
+        if (ImGui::Button("INF NUTS", ImVec2(-1, 40))) g_Logs.push_back("INF NUTS pressed");
+        ImGui::SameLine();
+        if (ImGui::Button("UNLOCK ALL", ImVec2(-1, 40))) g_Logs.push_back("Unlock all pressed");
         ImGui::Separator();
-        ImGui::Text("Trolling:");
-        ImGui::Checkbox("Orbit Players", &g_Config.OrbitPlayers);
-        ImGui::Checkbox("Tornado Mode", &g_Config.TornadoMode);
-        ImGui::Checkbox("Black Hole", &g_Config.BlackHoleMode);
-        
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8, 0.1, 0.1, 1.0));
-        if (ImGui::Button("☢ NUCLEAR STRIKE (400 EXPLOSIVES)", ImVec2(-1, 50))) Engine::Nuke();
+
+        ImGui::TextColored(ImVec4(0.6,1,1,1), "PLAYER");
+        if (ImGui::Button("TP TO LOCATION", ImVec2(-1, 35))) g_Logs.push_back("Teleport to location");
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6,0.3,1,1));
+        if (ImGui::Button("TP TO ME", ImVec2(-1, 35))) g_Logs.push_back("Teleport to me");
+        if (ImGui::Button("MAX STATS", ImVec2(-1, 35))) g_Logs.push_back("Max stats");
+        ImGui::PopStyleColor();
+        ImGui::Separator();
+
+        ImGui::TextColored(ImVec4(1,0.5,0,1), "EFFECTS");
+        if (ImGui::Button("YEET", ImVec2(-1, 30))) g_Logs.push_back("Yeet effect");
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,1,0,1));
+        if (ImGui::Button("JELLY", ImVec2(-1, 30))) g_Logs.push_back("Jelly effect");
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1,0,1,1));
+        if (ImGui::Button("COLOR", ImVec2(-1, 30))) g_Logs.push_back("Color effect");
+        ImGui::PopStyleColor();
+        ImGui::NewLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8,0.6,0.2,1));
+        if (ImGui::Button("SHAKE", ImVec2(-1, 30))) g_Logs.push_back("Shake effect");
+        ImGui::PopStyleColor();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8,0.3,0,1));
+        ImGui::SameLine(); if (ImGui::Button("DROP ALL", ImVec2(-1, 30))) g_Logs.push_back("Drop all");
+        ImGui::PopStyleColor();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0.8,0.8,1));
+        ImGui::SameLine(); if (ImGui::Button("JELLY ITEMS", ImVec2(-1, 30))) g_Logs.push_back("Jelly items");
+        ImGui::PopStyleColor();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1,0,0,1));
+        ImGui::NewLine(); if (ImGui::Button("DELETE ALL", ImVec2(-1, 30))) g_Logs.push_back("Delete all");
+        ImGui::PopStyleColor();
+        ImGui::Separator();
+
+        ImGui::TextColored(ImVec4(1,0.4,0.4,1), "COMBAT");
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1,0,0,1));
+        if (ImGui::Button("KILL ALL", ImVec2(-1, 35))) g_Logs.push_back("Kill all");
+        ImGui::SameLine(); if (ImGui::Button("KICK ALL", ImVec2(-1, 35))) g_Logs.push_back("Kick all");
         ImGui::PopStyleColor();
     }
     else if (g_Config.ActiveTab == 2) {
-        ImGui::TextColored(ImVec4(0.5,1,0.5,1), "PLAYER SENSORY"); ImGui::Separator();
-        ImGui::Checkbox("Enable Master ESP", &g_Config.ESP_Enabled);
-        if(g_Config.ESP_Enabled) {
-            ImGui::Indent();
-            ImGui::Checkbox("3D Box", &g_Config.ESP_Box);
-            ImGui::Checkbox("Lines", &g_Config.ESP_Lines);
-            ImGui::Checkbox("Distance", &g_Config.ESP_Distance);
-            ImGui::SliderFloat("Range", &g_Config.ESP_MaxDist, 50, 1000);
-            ImGui::Unindent();
+        // SETTINGS PAGE
+        ImGui::Checkbox("Monochrome Background", &g_Config.MonochromeBg);
+        ImGui::ColorEdit4("Accent Color", g_Config.AccentColor);
+        ImGui::Separator();
+
+        ImGui::Text("Target Player (%d)", g_Config.TargetPlayerIndex);
+        ImGui::SameLine(); if (ImGui::Button("Refresh")) {
+            g_Config.TargetPlayerIndex = 0;
+            g_Logs.push_back("Refreshed target list");
         }
-        ImGui::Checkbox("Night Vision", &g_Config.NightVision);
-        ImGui::Checkbox("Chams (Walls)", &g_Config.Chams);
+        ImGui::Text("No players tracked. Join a lobby first.");
+        ImGui::Separator();
+
+        ImGui::Text("Spawn Location");
+        static char locBuf[64] = "";
+        ImGui::InputTextWithHint("##loc","Custom Input", locBuf, 64);
+        ImGui::Text("Lobby Lake");
+        ImGui::Text("X: %.2f Y: %.2f Z: %.2f", g_Config.SpawnLocation.x, g_Config.SpawnLocation.y, g_Config.SpawnLocation.z);
+        ImGui::Checkbox("Use This Location", &g_Config.UseCustomSpawnLoc);
+        ImGui::Separator();
+
+        ImGui::Text("Custom Coordinates");
+        ImGui::InputFloat("X", &g_Config.CustomX, 0,0, "%.2f");
+        ImGui::InputFloat("Y", &g_Config.CustomY, 0,0, "%.2f");
+        ImGui::InputFloat("Z", &g_Config.CustomZ, 0,0, "%.2f");
     }
     else if (g_Config.ActiveTab == 3) {
-        ImGui::Text("Configuration"); ImGui::Separator();
-        ImGui::SliderFloat("Menu Scale", &io.FontGlobalScale, 0.8, 2.0);
-        ImGui::ColorEdit4("Theme Color", g_Config.AccentColor);
-        ImGui::Spacing();
-        ImGui::TextDisabled("Base: M1 Premium v7.0");
-        ImGui::TextDisabled("Engine: Dynamic IL2CPP Solver");
+        ImGui::Text("Beta features");
+        ImGui::Separator();
+        static bool ghostMode = false;
+        if (ImGui::Checkbox("Experimental Ghost Mode", &ghostMode)) {
+            g_Logs.push_back(ghostMode ? "Ghost mode enabled" : "Ghost mode disabled");
+        }
+        if (ImGui::Button("Trigger Server Crash", ImVec2(-1, 30))) {
+            g_Logs.push_back("Crash triggered (not really)");
+        }
+        ImGui::TextWrapped("Use these toggles to test new functionality while you hack.");
+    }
+    else if (g_Config.ActiveTab == 4) {
+        ImGui::TextColored(ImVec4(1,1,0,1), "MOD LOGS");
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1,0,0,1));
+        if (ImGui::Button("CLEAR", ImVec2(60, 25))) {
+            g_Logs.clear();
+        }
+        ImGui::PopStyleColor();
+        ImGui::Separator();
+        ImGui::BeginChild("LogsChild", ImVec2(0,0), true);
+        for(auto &ln : g_Logs) {
+            ImGui::TextWrapped("%s", ln.c_str());
+        }
+        ImGui::EndChild();
     }
 
     ImGui::EndChild();
