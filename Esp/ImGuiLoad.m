@@ -8,10 +8,6 @@
 #import "ImGuiLoad.h"
 #import "ImGuiDrawView.h"
 #import "modpanel/ModPanel.h"
-@interface ImGuiLoad()
-@property (nonatomic, strong) ImGuiDrawView *vna;
-@end
-UIWindow *mainWindow;
 @implementation ImGuiLoad
 
 + (instancetype)share
@@ -26,25 +22,18 @@ UIWindow *mainWindow;
 
 - (void)show
 {
-    if (!_vna) {
-        ImGuiDrawView *vc = [[ImGuiDrawView alloc] init];
-        _vna = vc;
-    }
-
-
-    [ImGuiDrawView showChange:true];
-    [[UIApplication sharedApplication].windows[0].rootViewController.view addSubview:_vna.view];
+    // simply request the ImGuiDrawView to appear
+    [ImGuiDrawView showMenu];
 }
 
 - (void)hide
 {
-    if (!_vna) {
-        ImGuiDrawView *vc = [[ImGuiDrawView alloc] init];
-        _vna = vc;
+    // remove the view if it exists
+    ImGuiDrawView *view = [ImGuiDrawView sharedInstance];
+    if (view && view.superview) {
+        [view removeFromSuperview];
     }
-    
-    [ImGuiDrawView showChange:false];
-    [[UIApplication sharedApplication].windows[0].rootViewController.view addSubview:_vna.view];
+    // no additional state required; ImGuiDrawView handles visibility itself
 }
 
 @end
