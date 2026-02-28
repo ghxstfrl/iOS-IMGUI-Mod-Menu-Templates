@@ -3,7 +3,7 @@
 #import "ImGuiDrawView.h"
 #import "CaptainHook.h"
 
-// Wait for the app to finish launching, then show the M1 ImGui menu
+// Wait for the app to finish launching, then show the ghost ImGui menu
 static void didFinishLaunching(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef info) {
     
     // Wait 3 seconds to ensure the game has created the main window, then launch the UI
