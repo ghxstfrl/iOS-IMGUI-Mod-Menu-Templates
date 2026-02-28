@@ -300,25 +300,52 @@ void DrawGalaxy(ImDrawList* dl, ImVec2 winPos, ImVec2 winSize) {
 // =========================================================================
 //  ITEM DATABASE
 // =========================================================================
-const char* g_Items[] = {
-    "item_fishing_rod", "item_fishing_rod_pro", "item_fishing_rod_god", "item_bait", "item_bait_premium", 
-    "item_fish_bass", "item_fish_salmon", "item_fish_shark", "item_fish_gold", "item_rpg", "item_rpg_cny", 
-    "item_rpg_easter", "item_rpg_smshr", "item_rpg_spear", "item_rpg_ammo", "item_rpg_ammo_egg",
-    "item_grenade_launcher", "item_flamethrower", "item_flamethrower_skull", "item_flamethrower_skull_ruby", 
-    "item_radiation_gun", "item_shotgun", "item_shotgun_ammo", "item_revolver", "item_revolver_gold", 
-    "item_revolver_ammo", "item_flaregun", "item_crossbow", "item_demon_sword", "item_great_sword", 
-    "item_hookshot_sword", "item_stellarsword_gold", "item_alphablade", "item_shield", "item_shield_viking_4", 
-    "item_ogre_hands", "item_timebomb", "item_dynamite", "item_grenade", "item_cluster_grenade", "item_landmine", 
-    "item_sticky_dynamite", "item_flashbang", "item_broccoli_grenade", "item_tripwire_explosive", "item_pumpkin_bomb", 
-    "item_anti_gravity_grenade", "item_tele_grenade", "item_impulse_grenade", "item_stash_grenade", "item_goldbar", 
-    "item_ruby", "item_diamond_jade_koi", "item_goldcoin", "item_ore_gold_l", "item_trophy", "item_rare_card", 
-    "item_ceo_plaque", "item_bloodlust_vial", "item_hh_key", "item_jetpack", "item_hoverpad", "item_vr_headset", 
-    "item_backpack", "item_backpack_mega", "item_flashlight", "item_flashlight_mega", "item_medkit", 
-    "item_bandage", "item_shredder", "item_pumpkin_pie", "item_metal_plate", "item_metal_ball", "item_ore_hell", 
-    "item_brain_chunk", "item_brick", "item_sludge", "item_stinky_cheese", "item_balloon", "item_balloon_heart", 
-    "item_glowstick", "item_disc", "item_snowball", "item_plank"
-};
-const int g_ItemCount = sizeof(g_Items) / sizeof(g_Items[0]);
+// Items hardcoded here are just a sample; additional entries can be added at runtime by
+// placing a newline‑separated list of item IDs in `/var/mobile/ghost/items.txt`.
+// The loader will merge the file contents with the built‑in defaults, so you can
+// keep this source list minimal while still exposing every item available in the
+// current game version.
+static std::vector<std::string> g_Items;
+
+void LoadItemList() {
+    if (!g_Items.empty()) return; // already initialized
+    // built‑in defaults (match whatever you know, keep for backwards compatibility)
+    const char* defaults[] = {
+        "item_fishing_rod", "item_fishing_rod_pro", "item_fishing_rod_god", "item_bait", "item_bait_premium",
+        "item_fish_bass", "item_fish_salmon", "item_fish_shark", "item_fish_gold", "item_rpg", "item_rpg_cny",
+        "item_rpg_easter", "item_rpg_smshr", "item_rpg_spear", "item_rpg_ammo", "item_rpg_ammo_egg",
+        "item_grenade_launcher", "item_flamethrower", "item_flamethrower_skull", "item_flamethrower_skull_ruby",
+        "item_radiation_gun", "item_shotgun", "item_shotgun_ammo", "item_revolver", "item_revolver_gold",
+        "item_revolver_ammo", "item_flaregun", "item_crossbow", "item_demon_sword", "item_great_sword",
+        "item_hookshot_sword", "item_stellarsword_gold", "item_alphablade", "item_shield", "item_shield_viking_4",
+        "item_ogre_hands", "item_timebomb", "item_dynamite", "item_grenade", "item_cluster_grenade", "item_landmine",
+        "item_sticky_dynamite", "item_flashbang", "item_broccoli_grenade", "item_tripwire_explosive", "item_pumpkin_bomb",
+        "item_anti_gravity_grenade", "item_tele_grenade", "item_impulse_grenade", "item_stash_grenade", "item_goldbar",
+        "item_ruby", "item_diamond_jade_koi", "item_goldcoin", "item_ore_gold_l", "item_trophy", "item_rare_card",
+        "item_ceo_plaque", "item_bloodlust_vial", "item_hh_key", "item_jetpack", "item_hoverpad", "item_vr_headset",
+        "item_backpack", "item_backpack_mega", "item_flashlight", "item_flashlight_mega", "item_medkit",
+        "item_bandage", "item_shredder", "item_pumpkin_pie", "item_metal_plate", "item_metal_ball", "item_ore_hell",
+        "item_brain_chunk", "item_brick", "item_sludge", "item_stinky_cheese", "item_balloon", "item_balloon_heart",
+        "item_glowstick", "item_disc", "item_snowball", "item_plank"
+    };
+    for (const char* id : defaults) g_Items.emplace_back(id);
+    
+    // merge from external file if present
+    FILE* f = fopen("/var/mobile/ghost/items.txt", "r");
+    if (f) {
+        char buf[256];
+        while (fgets(buf, sizeof(buf), f)) {
+            size_t len = strcspn(buf, "\r\n");
+            buf[len] = '\0';
+            if (buf[0] == '\0') continue;
+            g_Items.emplace_back(buf);
+        }
+        fclose(f);
+    }
+}
+
+// convenience helper for size
+inline int g_ItemCount() { return (int)g_Items.size(); }
 
 const char* g_Mobs[] = { "mob_zombie", "mob_skeleton", "mob_creeper", "mob_dragon", "mob_alien", "mob_mutant" };
 const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
@@ -527,11 +554,14 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
         ImGui::InputTextWithHint("##Search", "Search items...", sBuf, 64);
         ImGui::Separator();
 
+        // ensure we have the latest list (possibly augmented from disk)
+        LoadItemList();
+
         // item list with scrolling region
         static int sel = 0;
         ImGui::BeginChild("ItemListChild", ImVec2(0, 240), true);
-        for(int i=0; i<g_ItemCount; i++) {
-            const char* item = g_Items[i];
+        for(int i=0; i<g_ItemCount(); i++) {
+            const char* item = g_Items[i].c_str();
             // category filters
             if (category == 1 && !strstr(item, "fishing_rod")) continue;
             if (category == 2 && !strstr(item, "fish_")) continue;
@@ -566,7 +596,8 @@ const int g_MobCount = sizeof(g_Mobs) / sizeof(g_Mobs[0]);
         ImGui::Spacing();
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1, 0.8f, 0, 1));
         if (ImGui::Button("SPAWN NOW", ImVec2(-1, 50))) {
-            Engine::Spawn(g_Items[sel], g_Config.SpawnQty);
+            if(sel >= 0 && sel < g_ItemCount())
+                Engine::Spawn(g_Items[sel].c_str(), g_Config.SpawnQty);
         }
         ImGui::PopStyleColor();
     }
