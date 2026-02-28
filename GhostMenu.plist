@@ -7,8 +7,8 @@
     <dict>
         <key>Bundles</key>
         <array>
-            <!-- replace with the actual bundle identifier of Animal Company -->
-            <string>com.animalcompany.app</string>
+            <!-- Animal Company’s bundle identifier -->
+            <string>com.animalcompany.ac</string>
         </array>
     </dict>
 </dict>
